@@ -1,0 +1,45 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-careful2}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-careful2_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-careful2}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Applied only on first init of an empty data dir. The app also applies
+      # the schema on boot, so an existing volume still gets migrated.
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-careful2} -d ${POSTGRES_DB:-careful2}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-careful2}:${POSTGRES_PASSWORD:-careful2_dev_password}@db:5432/${POSTGRES_DB:-careful2}
+      PORT: 3001
+      NODE_ENV: production
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@careful2.ca}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme123}
+      ADMIN_NAME: ${ADMIN_NAME:-Careful2 Admin}
+      ORS_API_KEY: ${ORS_API_KEY:-}
+      DISTANCE_PROVIDER: ${DISTANCE_PROVIDER:-ors}
+      PRICE_BASE: ${PRICE_BASE:-5.00}
+      PRICE_PER_KM: ${PRICE_PER_KM:-1.50}
+      PRICE_MIN: ${PRICE_MIN:-8.00}
+      CURRENCY: ${CURRENCY:-CAD}
+    ports:
+      - "3001:3001"
+
+volumes:
+  pgdata:
