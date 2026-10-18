@@ -73,6 +73,12 @@ export interface AppConfig {
   distance: { provider: string; configured: boolean };
 }
 
+export interface AddressSuggestion {
+  label: string;
+  lat: number;
+  lng: number;
+}
+
 const TOKEN_KEY = "careful2_token";
 
 export function getToken(): string | null {
@@ -132,6 +138,10 @@ export const api = {
   // meta
   categories: () => request<{ categories: string[] }>("GET", "/categories"),
   config: () => request<AppConfig>("GET", "/config"),
+
+  // geo
+  addressAutocomplete: (q: string) =>
+    request<{ suggestions: AddressSuggestion[] }>("GET", `/geo/autocomplete?q=${encodeURIComponent(q)}`),
 
   // orders
   quote: (pickupAddress: string, dropoffAddress: string, manualKm?: number) =>

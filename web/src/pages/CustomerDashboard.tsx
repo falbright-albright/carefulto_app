@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { api, ApiError, type Order, type Quote } from "@/lib/api";
+import { api, ApiError, type AddressSuggestion, type Order, type Quote } from "@/lib/api";
 import { money, when } from "@/lib/format";
 import { OrderStatusBadge } from "@/components/OrderStatusBadge";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { LocationMap } from "@/components/LocationMap";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,6 +36,8 @@ export default function CustomerDashboard() {
   const [description, setDescription] = useState("");
   const [pickup, setPickup] = useState("");
   const [dropoff, setDropoff] = useState("");
+  const [pickupPoint, setPickupPoint] = useState<AddressSuggestion | null>(null);
+  const [dropoffPoint, setDropoffPoint] = useState<AddressSuggestion | null>(null);
   const [manualKm, setManualKm] = useState("");
   const [needsManual, setNeedsManual] = useState(false);
   const [quote, setQuote] = useState<Quote | null>(null);
@@ -103,6 +107,8 @@ export default function CustomerDashboard() {
       setDescription("");
       setPickup("");
       setDropoff("");
+      setPickupPoint(null);
+      setDropoffPoint(null);
       setManualKm("");
       setNeedsManual(false);
       setQuote(null);
@@ -173,29 +179,41 @@ export default function CustomerDashboard() {
 
               <div className="space-y-2">
                 <Label htmlFor="pickup">Pickup address</Label>
-                <Input
+                <AddressAutocomplete
                   id="pickup"
                   placeholder="123 King St W, Toronto, ON"
                   value={pickup}
-                  onChange={(e) => {
-                    setPickup(e.target.value);
+                  onChange={(text) => {
+                    setPickup(text);
+                    setPickupPoint(null);
                     resetQuote();
                   }}
+                  onSelect={(s) => setPickupPoint(s)}
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="dropoff">Delivery address</Label>
-                <Input
+                <AddressAutocomplete
                   id="dropoff"
                   placeholder="456 Queen St E, Toronto, ON"
                   value={dropoff}
-                  onChange={(e) => {
-                    setDropoff(e.target.value);
+                  onChange={(text) => {
+                    setDropoff(text);
+                    setDropoffPoint(null);
                     resetQuote();
                   }}
+                  onSelect={(s) => setDropoffPoint(s)}
                 />
               </div>
+
+              {(pickupPoint || dropoffPoint) && (
+                <LocationMap
+                  className="h-56 overflow-hidden rounded-md border"
+                  pickup={pickupPoint ?? undefined}
+                  dropoff={dropoffPoint ?? undefined}
+                />
+              )}
 
               {needsManual && (
                 <div className="space-y-2">

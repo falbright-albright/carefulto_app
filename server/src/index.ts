@@ -6,6 +6,7 @@ import { json, error } from "./http.ts";
 
 import * as authR from "./routes/auth.ts";
 import * as metaR from "./routes/meta.ts";
+import * as geoR from "./routes/geo.ts";
 import * as orderR from "./routes/orders.ts";
 import * as adminR from "./routes/admin.ts";
 import * as courierR from "./routes/courier.ts";
@@ -31,6 +32,9 @@ const routes: Route[] = [
   // --- meta ---
   { method: "GET", pattern: "/api/categories", access: "public", handler: metaR.categories },
   { method: "GET", pattern: "/api/config", access: "public", handler: metaR.appConfig },
+
+  // --- geo ---
+  { method: "GET", pattern: "/api/geo/autocomplete", access: ["customer", "admin"], handler: geoR.getAutocomplete },
 
   // --- orders ---
   { method: "POST", pattern: "/api/orders/quote", access: ["customer", "admin"], handler: orderR.quote },
