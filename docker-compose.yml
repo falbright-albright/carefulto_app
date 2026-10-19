@@ -65,7 +65,10 @@ services:
       IMPORT_GB_POSTCODES: "false"
       FREEZE: "true"
     volumes:
-      - ./data/osm/ontario-latest.osm.pbf:/nominatim/data/ontario-latest.osm.pbf:ro
+      # Not :ro — the image's own startup script chowns this file before
+      # importing, which fails (and crash-loops the container) on a
+      # read-only mount.
+      - ./data/osm/ontario-latest.osm.pbf:/nominatim/data/ontario-latest.osm.pbf
       - nominatim-data:/var/lib/postgresql/14/main
     shm_size: 1gb
     ports:

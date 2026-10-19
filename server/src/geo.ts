@@ -21,7 +21,12 @@ export class GeoUnavailableError extends Error {
 }
 
 export async function autocomplete(queryText: string): Promise<AddressSuggestion[]> {
-  const url = new URL(`${config.geo.nominatimUrl}/search`);
+  // search.php, not /search: Nominatim's Apache front-end resolves /search to
+  // search.php via content-negotiation (MultiViews), which only registers a
+  // text/html representation — an explicit Accept: application/json then
+  // trips a 406. Hitting search.php directly skips that negotiation; the
+  // response format is controlled by format=jsonv2 regardless.
+  const url = new URL(`${config.geo.nominatimUrl}/search.php`);
   url.searchParams.set("q", queryText);
   url.searchParams.set("format", "jsonv2");
   url.searchParams.set("countrycodes", "ca");
@@ -31,7 +36,7 @@ export async function autocomplete(queryText: string): Promise<AddressSuggestion
 
   let res: Response;
   try {
-    res = await fetch(url, { headers: { Accept: "application/json" } });
+    res = await fetch(url);
   } catch (err) {
     throw new GeoUnavailableError(
       `Could not reach the address service: ${err instanceof Error ? err.message : String(err)}`,
