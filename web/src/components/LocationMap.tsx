@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
 import L, { type LatLngBoundsExpression, type LatLngTuple } from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -36,13 +36,27 @@ interface Point {
 interface LocationMapProps {
   pickup?: Point;
   dropoff?: Point;
+  route?: [number, number][];
   className?: string;
 }
 
-function FitToMarkers({ pickup, dropoff }: { pickup?: Point; dropoff?: Point }) {
+function FitToView({
+  pickup,
+  dropoff,
+  route,
+}: {
+  pickup?: Point;
+  dropoff?: Point;
+  route?: [number, number][];
+}) {
   const map = useMap();
   useEffect(() => {
-    if (pickup && dropoff) {
+    // A real driving route can bow out well beyond the straight line between
+    // the two pins (detours, one-ways, etc.) — frame the whole path when we
+    // have one instead of just the two points.
+    if (route && route.length > 0) {
+      map.fitBounds(route, { padding: [32, 32], maxZoom: 14 });
+    } else if (pickup && dropoff) {
       map.fitBounds(
         [
           [pickup.lat, pickup.lng],
@@ -56,13 +70,14 @@ function FitToMarkers({ pickup, dropoff }: { pickup?: Point; dropoff?: Point }) 
       map.setView([dropoff.lat, dropoff.lng], 13);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pickup?.lat, pickup?.lng, dropoff?.lat, dropoff?.lng]);
+  }, [pickup?.lat, pickup?.lng, dropoff?.lat, dropoff?.lng, route]);
   return null;
 }
 
 // Small read-only map preview, bounded to Ontario, showing the selected
-// pickup/dropoff pins. Uses public OSM raster tiles (no API key).
-export function LocationMap({ pickup, dropoff, className }: LocationMapProps) {
+// pickup/dropoff pins and, once calculated, a driving route line between
+// them. Uses public OSM raster tiles (no API key).
+export function LocationMap({ pickup, dropoff, route, className }: LocationMapProps) {
   return (
     <div className={className}>
       <MapContainer
@@ -78,6 +93,9 @@ export function LocationMap({ pickup, dropoff, className }: LocationMapProps) {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
+        {route && route.length > 0 && (
+          <Polyline positions={route} pathOptions={{ color: "#2563eb", weight: 4, opacity: 0.8 }} />
+        )}
         {pickup && (
           <Marker position={[pickup.lat, pickup.lng]} icon={pickupIcon}>
             <Popup>Pickup{pickup.label ? `: ${pickup.label}` : ""}</Popup>
@@ -88,7 +106,7 @@ export function LocationMap({ pickup, dropoff, className }: LocationMapProps) {
             <Popup>Drop-off{dropoff.label ? `: ${dropoff.label}` : ""}</Popup>
           </Marker>
         )}
-        <FitToMarkers pickup={pickup} dropoff={dropoff} />
+        <FitToView pickup={pickup} dropoff={dropoff} route={route} />
       </MapContainer>
     </div>
   );

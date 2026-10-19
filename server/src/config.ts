@@ -37,6 +37,9 @@ export const config = {
     nominatimUrl: str("NOMINATIM_URL", "http://nominatim:8080"),
     // minLon,minLat,maxLon,maxLat — bounds autocomplete to Ontario.
     ontarioViewbox: str("ONTARIO_VIEWBOX", "-95.2,41.6,-74.3,56.9"),
+    // Self-hosted OSRM instance (see docker-compose.yml). Used only for the
+    // route-preview line on the map — pricing stays on OpenRouteService.
+    osrmUrl: str("OSRM_URL", "http://osrm:5000"),
   },
 
   pricing: {

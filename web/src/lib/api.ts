@@ -79,6 +79,17 @@ export interface AddressSuggestion {
   lng: number;
 }
 
+export interface GeoPoint {
+  lat: number;
+  lng: number;
+}
+
+export interface RoutePreview {
+  distanceKm: number;
+  durationMin: number;
+  geometry: [number, number][]; // [lat, lng] pairs, in travel order
+}
+
 const TOKEN_KEY = "careful2_token";
 
 export function getToken(): string | null {
@@ -142,6 +153,11 @@ export const api = {
   // geo
   addressAutocomplete: (q: string) =>
     request<{ suggestions: AddressSuggestion[] }>("GET", `/geo/autocomplete?q=${encodeURIComponent(q)}`),
+  routePreview: (pickup: GeoPoint, dropoff: GeoPoint) =>
+    request<RoutePreview>(
+      "GET",
+      `/geo/route?pickupLat=${pickup.lat}&pickupLng=${pickup.lng}&dropoffLat=${dropoff.lat}&dropoffLng=${dropoff.lng}`,
+    ),
 
   // orders
   quote: (pickupAddress: string, dropoffAddress: string, manualKm?: number) =>

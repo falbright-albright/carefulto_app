@@ -35,6 +35,7 @@ const routes: Route[] = [
 
   // --- geo ---
   { method: "GET", pattern: "/api/geo/autocomplete", access: ["customer", "admin"], handler: geoR.getAutocomplete },
+  { method: "GET", pattern: "/api/geo/route", access: ["customer", "admin"], handler: geoR.getRoute },
 
   // --- orders ---
   { method: "POST", pattern: "/api/orders/quote", access: ["customer", "admin"], handler: orderR.quote },
