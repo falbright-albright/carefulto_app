@@ -188,7 +188,11 @@ export default function CustomerDashboard() {
                     setPickupPoint(null);
                     resetQuote();
                   }}
-                  onSelect={(s) => setPickupPoint(s)}
+                  onSelect={(s) => {
+                    setPickup(s.label);
+                    setPickupPoint(s);
+                    resetQuote();
+                  }}
                 />
               </div>
 
@@ -203,7 +207,11 @@ export default function CustomerDashboard() {
                     setDropoffPoint(null);
                     resetQuote();
                   }}
-                  onSelect={(s) => setDropoffPoint(s)}
+                  onSelect={(s) => {
+                    setDropoff(s.label);
+                    setDropoffPoint(s);
+                    resetQuote();
+                  }}
                 />
               </div>
 

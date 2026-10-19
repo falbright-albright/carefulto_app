@@ -25,6 +25,15 @@ export function AddressAutocomplete({
   const [loading, setLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  // Selecting a suggestion changes `value` (via onSelect updating the parent's
+  // text state), which would otherwise re-trigger the debounced search below
+  // and silently reopen the dropdown right after the user picked something.
+  const justSelectedRef = useRef(false);
+  // Guards against an out-of-order network reply: if the user keeps typing
+  // while an earlier request is still in flight, a slower response for a
+  // shorter/older query can resolve after a newer one and overwrite it.
+  const latestValueRef = useRef(value);
+  latestValueRef.current = value;
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -38,20 +47,26 @@ export function AddressAutocomplete({
 
   useEffect(() => {
     clearTimeout(debounceRef.current);
+    if (justSelectedRef.current) {
+      justSelectedRef.current = false;
+      return;
+    }
     if (value.trim().length < 3) {
       setSuggestions([]);
       return;
     }
+    const queryAtFetch = value;
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const { suggestions } = await api.addressAutocomplete(value);
+        const { suggestions } = await api.addressAutocomplete(queryAtFetch);
+        if (latestValueRef.current !== queryAtFetch) return; // superseded by newer input
         setSuggestions(suggestions);
         setOpen(true);
       } catch {
-        setSuggestions([]);
+        if (latestValueRef.current === queryAtFetch) setSuggestions([]);
       } finally {
-        setLoading(false);
+        if (latestValueRef.current === queryAtFetch) setLoading(false);
       }
     }, 350);
     return () => clearTimeout(debounceRef.current);
@@ -84,8 +99,8 @@ export function AddressAutocomplete({
                   "block w-full truncate px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
                 )}
                 onClick={() => {
+                  justSelectedRef.current = true;
                   onSelect(s);
-                  onChange(s.label);
                   setOpen(false);
                   setSuggestions([]);
                 }}
