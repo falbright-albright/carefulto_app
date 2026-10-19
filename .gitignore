@@ -5,3 +5,6 @@ dist/
 bun.lock
 bun.lockb
 .DS_Store
+
+# One-time OSM extract + built routing graph (see scripts/fetch-ontario-osm.sh)
+data/
