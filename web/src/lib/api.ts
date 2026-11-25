@@ -85,6 +85,63 @@ export interface GeoPoint {
   lng: number;
 }
 
+export interface PeriodStats {
+  requests: number;
+  deliveries: number;
+  revenue: number;
+  avgPrice: number | null;
+  avgDistanceKm: number | null;
+  activeCouriers: number;
+  deliveriesPerActiveCourier: number | null;
+  requestingCustomers: number;
+  repeatCustomers: number;
+  newCustomers: number;
+  offers: number;
+  offersAccepted: number;
+  avgMinutesToAccept: number | null;
+}
+
+export interface AnalyticsOverview {
+  month: string; // YYYY-MM
+  firstMonth: string;
+  currentMonth: string;
+  timeZone: string;
+  currency: string;
+  totals: {
+    customers: number;
+    couriers: number;
+    couriersActive: number;
+    awaitingCourier: number;
+    inProgress: number;
+    deliveriesAllTime: number;
+    revenueAllTime: number;
+  };
+  current: PeriodStats;
+  previous: PeriodStats;
+  previousIsPartial: boolean; // previous covers the same elapsed stretch only
+  daily: { date: string; deliveries: number; requests: number }[];
+  categories: {
+    months: string[]; // trailing 12 months, oldest first
+    rows: { category: string; month: number; allTime: number; byMonth: number[] }[];
+  };
+}
+
+export interface RegionStat {
+  id: string;
+  name: string;
+  county: string | null;
+  baseline: boolean; // one of the always-drawn GTA/Hamilton municipalities
+  pickups: number;
+  delivered: number;
+  geojson: GeoJSON.Geometry | null;
+}
+
+export interface RegionAnalytics {
+  month: string; // YYYY-MM or "all"
+  unassigned: number;
+  regions: RegionStat[];
+}
+
 const TOKEN_KEY = "careful2_token";
 
 export function getToken(): string | null {
@@ -147,7 +204,10 @@ export const api = {
 
   // geo
   addressAutocomplete: (q: string) =>
-    request<{ suggestions: AddressSuggestion[] }>("GET", `/geo/autocomplete?q=${encodeURIComponent(q)}`),
+    request<{ suggestions: AddressSuggestion[] }>(
+      "GET",
+      `/geo/autocomplete?q=${encodeURIComponent(q)}`,
+    ),
 
   // orders
   quote: (pickup: GeoPoint, dropoff: GeoPoint) =>
@@ -179,14 +239,24 @@ export const api = {
 
   // admin
   listUsers: () => request<{ users: AdminUser[] }>("GET", "/admin/users"),
-  listCouriers: () => request<{ couriers: { id: string; name: string; email: string }[] }>(
-    "GET",
-    "/admin/couriers",
-  ),
-  createUser: (input: { email: string; name: string; password: string; role: "courier" | "admin" }) =>
-    request<{ user: AdminUser }>("POST", "/admin/users", input),
+  listCouriers: () =>
+    request<{ couriers: { id: string; name: string; email: string }[] }>("GET", "/admin/couriers"),
+  createUser: (input: {
+    email: string;
+    name: string;
+    password: string;
+    role: "courier" | "admin";
+  }) => request<{ user: AdminUser }>("POST", "/admin/users", input),
   banUser: (id: string) => request<{ ok: true }>("POST", `/admin/users/${id}/ban`),
   unbanUser: (id: string) => request<{ ok: true }>("POST", `/admin/users/${id}/unban`),
+  // No month = the current month (server's business time zone).
+  analytics: (month?: string) =>
+    request<AnalyticsOverview>(
+      "GET",
+      month ? `/admin/analytics?month=${encodeURIComponent(month)}` : "/admin/analytics",
+    ),
+  regionAnalytics: (month: string | "all") =>
+    request<RegionAnalytics>("GET", `/admin/analytics/regions?month=${encodeURIComponent(month)}`),
 
   // notifications
   notifications: () =>

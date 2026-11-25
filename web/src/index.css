@@ -58,3 +58,61 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Admin analytics. Scoped under .analytics so the rest of the app keeps its
+   shadcn defaults. One family (Schibsted Grotesk) for headings and figures;
+   colour is route-map navy ink on cool paper, data in a single blue ramp.
+   --------------------------------------------------------------------------- */
+.analytics {
+  --a-ink: #14213d;
+  --a-ink-2: #4a5568;
+  --a-muted: #7c8696;
+  --a-paper: #f5f7fa;
+  --a-surface: #ffffff;
+  --a-hair: #e3e7ee;
+  --a-axis: #c5ccd8;
+  --a-data: #2a78d6;
+  --a-data-soft: #cde2fb;
+  --a-up: #006300;
+  --a-down: #c23030;
+  /* Sequential blue (light -> dark) for magnitude: map + heat grid. */
+  --a-seq-0: #eef1f5;
+  --a-seq-1: #cde2fb;
+  --a-seq-2: #86b6ef;
+  --a-seq-3: #3987e5;
+  --a-seq-4: #1c5cab;
+  --a-seq-5: #0d366b;
+  color: var(--a-ink);
+  font-family: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.analytics .a-figure {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.analytics .a-tabular {
+  font-variant-numeric: tabular-nums;
+}
+/* Greyscale basemap so the shaded regions carry all the colour. */
+.analytics .a-basemap {
+  filter: grayscale(1) contrast(0.85) brightness(1.06);
+}
+.analytics .a-region-count {
+  text-align: center;
+  font: 700 12px/1 "Schibsted Grotesk", system-ui, sans-serif;
+  color: #fff;
+  text-shadow: 0 0 3px rgba(13, 54, 107, 0.9), 0 0 1px rgba(13, 54, 107, 1);
+}
+.analytics .leaflet-tooltip.a-region-hover {
+  font-family: "Schibsted Grotesk", system-ui, sans-serif;
+  border-radius: 8px;
+  border: 1px solid var(--a-hair);
+  color: var(--a-ink);
+  box-shadow: 0 6px 20px -8px rgba(20, 33, 61, 0.35);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .analytics .a-bar {
+    transition: opacity 120ms ease;
+  }
+}

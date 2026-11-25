@@ -43,6 +43,7 @@ services:
       NOMINATIM_URL: http://nominatim:8080
       OSRM_URL: http://osrm:5000
       ONTARIO_VIEWBOX: ${ONTARIO_VIEWBOX:--95.2,41.6,-74.3,56.9}
+      ANALYTICS_TZ: ${ANALYTICS_TZ:-America/Toronto}
     ports:
       - "3001:3001"
 

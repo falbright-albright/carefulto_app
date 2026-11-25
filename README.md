@@ -87,6 +87,51 @@ and OSRM's `table` endpoint is exactly the multi-point distance matrix that
 **Not yet implemented:** courier live-location tracking and a nearest-driver
 endpoint. Those depend on real courier GPS data and are future work.
 
+## Admin analytics
+
+The admin dashboard's **Analytics** tab reports on the business month by month
+(pick any month since the first order; month-in-progress figures are compared
+with the same days of the previous month):
+
+- **KPI boxes:** registered customers, couriers, new customers, delivery
+  requests, average delivery price, deliveries per courier, revenue recorded,
+  average distance, courier acceptance rate, time to courier acceptance, repeat
+  customers, and orders waiting for a courier.
+- **Deliveries per day** for the chosen month.
+- **Pickup requests by region:** a map of GTA/Hamilton municipalities shaded by
+  pickup count (with counts printed on the map), for the chosen month or all time.
+- **Requests by item category:** for the chosen month or all time, plus a
+  12-month category × month grid.
+- **Metrics to add next:** suggested KPIs and what data each one needs.
+
+Definitions: a *request* is an order placed (dated by when it was placed); a
+*delivery* is an order the courier reported delivered (dated by that report).
+Days and months are bucketed in `ANALYTICS_TZ` (default `America/Toronto`).
+
+**How regions work.** OSRM only knows roads, so regions come from the
+self-hosted **Nominatim** built from the same Ontario extract: when an order is
+placed, its pickup point is reverse-geocoded at city level, which returns the
+municipality's OSM administrative boundary (e.g. Mississauga, relation
+1954127) *and its outline*. Sub-municipal areas (Toronto's former boroughs
+like North York) are rolled up to their city. The region and outline are
+stored in the `regions` table and orders get `pickup_region_id`. Older orders
+are backfilled automatically. A curated set of GTA + Hamilton municipalities is
+always drawn (so a region with zero pickups shows as zero); regions elsewhere
+(Barrie, Guelph, ...) appear once a pickup lands there. Nothing external is
+called (map tiles aside).
+
+**Previewing with demo data.** `server/scripts/seed-demo.ts` fills a database
+whose name contains `demo` (it refuses anything else) with ~6 months of
+synthetic GTA orders:
+
+```bash
+docker compose exec db psql -U careful2 -c "CREATE DATABASE careful2_demo"
+cd server
+DATABASE_URL=postgres://careful2:careful2_dev_password@<db-host>:5432/careful2_demo bun run seed:demo
+DATABASE_URL=...careful2_demo PORT=3011 NOMINATIM_URL=http://localhost:8089 OSRM_URL=http://localhost:5000 bun run dev
+cd ../web && API_PROXY_TARGET=http://localhost:3011 bun run dev
+```
+
 ## Local development (without Docker for the app)
 
 Run Postgres (via compose) and the two dev servers:
@@ -121,6 +166,9 @@ server/                  Bun API server + static SPA host
   src/routing.ts         OSRM driving distance/route (pricing + map line)
   src/geo.ts             Nominatim-backed address autocomplete (Ontario-only)
   src/pricing.ts         Pricing formula
+  src/regions.ts         Pickup -> municipality (Nominatim) for analytics
+  src/routes/analytics.ts  Admin analytics endpoints
+  scripts/seed-demo.ts   Synthetic data for a *demo* database
 web/                     React + shadcn frontend
   src/components/AddressAutocomplete.tsx  Debounced address search-as-you-type
   src/components/LocationMap.tsx          Small Ontario-bounded map preview (Leaflet)

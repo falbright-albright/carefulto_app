@@ -8,6 +8,7 @@
     "start": "bun run src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
+    "seed:demo": "bun run scripts/seed-demo.ts",
     "lint": "biome check src test",
     "format": "biome format --write src test"
   },

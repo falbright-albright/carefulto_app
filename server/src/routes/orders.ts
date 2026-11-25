@@ -7,6 +7,7 @@ import { priceForDistance } from "../pricing.ts";
 import { config } from "../config.ts";
 import { getOrder, listAllOrders, listOrdersForCourier, listOrdersForCustomer } from "../orders.ts";
 import { notify, notifyAdmins } from "../notifications.ts";
+import { assignPickupRegion } from "../regions.ts";
 
 const NOTES_MAX = 2000;
 
@@ -126,6 +127,9 @@ export async function create(
     RETURNING id
   `;
   const orderId = rows[0]!.id;
+  // Tag the pickup's municipality for analytics. Fire-and-forget: it never
+  // throws and must not delay or fail order placement.
+  void assignPickupRegion(orderId, points.pickup.lat, points.pickup.lng);
 
   await notifyAdmins({
     orderId,
