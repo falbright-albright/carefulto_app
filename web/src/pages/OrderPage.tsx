@@ -147,6 +147,11 @@ function OrderDetails({ order: o, actions }: { order: Order; actions: React.Reac
           {o.itemDescription && <Row label="Item description">{o.itemDescription}</Row>}
           <Row label="Pickup address">{o.pickupAddress}</Row>
           <Row label="Delivery address">{o.dropoffAddress}</Row>
+          {o.notes && (
+            <Row label="Delivery notes">
+              <span className="whitespace-pre-wrap">{o.notes}</span>
+            </Row>
+          )}
           <Row label="Distance">{o.distanceKm} km</Row>
           <Row label="Price">
             <span className="font-semibold">{money(o.price, o.currency)}</span>
