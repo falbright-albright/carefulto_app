@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { api, ApiError, type AddressSuggestion, type Order, type Quote, type RoutePreview } from "@/lib/api";
+import { api, ApiError, type AddressSuggestion, type Order, type Quote } from "@/lib/api";
 import { money, when } from "@/lib/format";
 import { OrderStatusBadge } from "@/components/OrderStatusBadge";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { LocationMap } from "@/components/LocationMap";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -26,6 +25,17 @@ import {
 } from "@/components/ui/select";
 import { MapPin, Truck } from "lucide-react";
 
+// Shown as the grey placeholder in the delivery-notes field.
+const NOTES_PLACEHOLDER =
+  "Please share any additional details that will help us complete your delivery. " +
+  "If your exact pickup or drop-off location did not appear in our address suggestions, " +
+  "select the nearest available address above and describe the precise location here — " +
+  "for example, the building name, unit or suite number, entrance, loading dock, or a nearby landmark. " +
+  "Our address and pricing tools currently rely on free mapping data that does not yet include every address, " +
+  "and we apologize for any inconvenience this may cause. " +
+  "Please include as much information as you can: the more detail you provide, " +
+  "the better our courier can pick up and deliver your item exactly where you need it.";
+
 export default function CustomerDashboard() {
   const [categories, setCategories] = useState<string[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -38,10 +48,8 @@ export default function CustomerDashboard() {
   const [dropoff, setDropoff] = useState("");
   const [pickupPoint, setPickupPoint] = useState<AddressSuggestion | null>(null);
   const [dropoffPoint, setDropoffPoint] = useState<AddressSuggestion | null>(null);
-  const [manualKm, setManualKm] = useState("");
-  const [needsManual, setNeedsManual] = useState(false);
+  const [notes, setNotes] = useState("");
   const [quote, setQuote] = useState<Quote | null>(null);
-  const [route, setRoute] = useState<RoutePreview | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [placing, setPlacing] = useState(false);
 
@@ -61,10 +69,7 @@ export default function CustomerDashboard() {
     return () => clearInterval(t);
   }, []);
 
-  const resetQuote = () => {
-    setQuote(null);
-    setRoute(null);
-  };
+  const resetQuote = () => setQuote(null);
 
   const getQuote = async () => {
     if (!pickupPoint || !dropoffPoint) {
@@ -73,26 +78,7 @@ export default function CustomerDashboard() {
     }
     setQuoting(true);
     try {
-      const km = manualKm ? Number(manualKm) : undefined;
-      const [q, routeResult] = await Promise.all([
-        api.quote(pickup, dropoff, needsManual ? km : undefined),
-        api.routePreview(pickupPoint, dropoffPoint).catch(() => null),
-      ]);
-      if (q.needsManual) {
-        setNeedsManual(true);
-        setQuote(null);
-        toast.message("Enter the distance manually", {
-          description: "Automatic distance is unavailable for these addresses.",
-        });
-      } else {
-        setQuote(q);
-      }
-      setRoute(routeResult);
-      if (!routeResult) {
-        toast.message("Route preview unavailable", {
-          description: "The price above is still accurate — just couldn't draw the route line.",
-        });
-      }
+      setQuote(await api.quote(pickupPoint, dropoffPoint));
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Could not calculate price");
     } finally {
@@ -102,15 +88,19 @@ export default function CustomerDashboard() {
 
   const placeOrder = async () => {
     if (!category) return toast.error("Choose an item category");
-    if (!quote) return toast.error("Calculate the price first");
+    if (!quote || !pickupPoint || !dropoffPoint) return toast.error("Calculate the price first");
     setPlacing(true);
     try {
       await api.createOrder({
         itemCategory: category,
         itemDescription: description || undefined,
+        notes: notes.trim() || undefined,
         pickupAddress: pickup,
+        pickupLat: pickupPoint.lat,
+        pickupLng: pickupPoint.lng,
         dropoffAddress: dropoff,
-        manualKm: needsManual && manualKm ? Number(manualKm) : undefined,
+        dropoffLat: dropoffPoint.lat,
+        dropoffLng: dropoffPoint.lng,
       });
       toast.success("Order placed!");
       // reset
@@ -120,10 +110,8 @@ export default function CustomerDashboard() {
       setDropoff("");
       setPickupPoint(null);
       setDropoffPoint(null);
-      setManualKm("");
-      setNeedsManual(false);
+      setNotes("");
       setQuote(null);
-      setRoute(null);
       setTab("orders");
       loadOrders();
     } catch (err) {
@@ -232,7 +220,7 @@ export default function CustomerDashboard() {
                   className="h-56 overflow-hidden rounded-md border"
                   pickup={pickupPoint ?? undefined}
                   dropoff={dropoffPoint ?? undefined}
-                  route={route?.geometry}
+                  route={quote?.geometry}
                 />
               )}
 
@@ -242,26 +230,17 @@ export default function CustomerDashboard() {
                 </p>
               )}
 
-              {needsManual && (
-                <div className="space-y-2">
-                  <Label htmlFor="km">Distance (km)</Label>
-                  <Input
-                    id="km"
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    placeholder="e.g. 12.5"
-                    value={manualKm}
-                    onChange={(e) => {
-                      setManualKm(e.target.value);
-                      resetQuote();
-                    }}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Automatic distance lookup is unavailable — please enter the distance.
-                  </p>
-                </div>
-              )}
+              <div className="space-y-2">
+                <Label htmlFor="notes">Delivery notes (optional)</Label>
+                <Textarea
+                  id="notes"
+                  rows={7}
+                  maxLength={2000}
+                  placeholder={NOTES_PLACEHOLDER}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </div>
 
               <div className="flex items-center gap-3">
                 <Button
@@ -279,12 +258,8 @@ export default function CustomerDashboard() {
                     <span className="text-lg font-bold text-primary">
                       {money(quote.price, quote.currency)}
                     </span>
-                    {route && (
-                      <>
-                        <span className="mx-2 text-muted-foreground">·</span>
-                        <span className="text-muted-foreground">~{Math.round(route.durationMin)} min drive</span>
-                      </>
-                    )}
+                    <span className="mx-2 text-muted-foreground">·</span>
+                    <span className="text-muted-foreground">~{Math.round(quote.durationMin)} min drive</span>
                   </div>
                 )}
               </div>
@@ -323,6 +298,11 @@ export default function CustomerDashboard() {
                         <span className="text-muted-foreground">Distance / price:</span>{" "}
                         {o.distanceKm} km · {money(o.price, o.currency)}
                       </p>
+                      {o.notes && (
+                        <p className="whitespace-pre-wrap">
+                          <span className="text-muted-foreground">Notes:</span> {o.notes}
+                        </p>
+                      )}
                       {o.courierName && (
                         <p>
                           <span className="text-muted-foreground">Courier:</span> {o.courierName}

@@ -1,17 +1,6 @@
 import { json, error } from "../http.ts";
 import { autocomplete, GeoUnavailableError } from "../geo.ts";
-import { route, RouteUnavailableError } from "../routing.ts";
-import { config } from "../config.ts";
-
-const [minLng, minLat, maxLng, maxLat] = config.geo.ontarioViewbox.split(",").map(Number);
-
-// OSRM doesn't error on an out-of-region point — it silently snaps it to the
-// nearest road in whatever's loaded (here, Ontario only), which for a point
-// nowhere near Ontario can produce a nonsensical degenerate "route". Reject
-// up front using the same bounding box autocomplete is already limited to.
-function withinOntario(lat: number, lng: number): boolean {
-  return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
-}
+import { route, RouteUnavailableError, withinOntario } from "../routing.ts";
 
 // GET /api/geo/autocomplete?q=...  — Ontario-bounded address suggestions.
 export async function getAutocomplete(req: Request): Promise<Response> {
@@ -30,8 +19,7 @@ export async function getAutocomplete(req: Request): Promise<Response> {
 }
 
 // GET /api/geo/route?pickupLat=&pickupLng=&dropoffLat=&dropoffLng=
-// Driving route preview between two known points. Informational only — not
-// used for pricing, which stays on the existing OpenRouteService quote.
+// Driving route between two known points (same OSRM call that prices orders).
 export async function getRoute(req: Request): Promise<Response> {
   const params = new URL(req.url).searchParams;
   // Number(null) is 0, not NaN — a missing param would otherwise silently
@@ -52,7 +40,10 @@ export async function getRoute(req: Request): Promise<Response> {
   if (![pickupLat, pickupLng, dropoffLat, dropoffLng].every(Number.isFinite)) {
     return error("pickupLat, pickupLng, dropoffLat and dropoffLng are required numbers");
   }
-  if (!withinOntario(pickupLat, pickupLng) || !withinOntario(dropoffLat, dropoffLng)) {
+  if (
+    !withinOntario({ lat: pickupLat, lng: pickupLng }) ||
+    !withinOntario({ lat: dropoffLat, lng: dropoffLng })
+  ) {
     return error("coordinates must be within Ontario");
   }
 

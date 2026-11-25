@@ -27,25 +27,20 @@ export const config = {
     name: str("ADMIN_NAME", "Careful2 Admin"),
   },
 
-  distance: {
-    provider: str("DISTANCE_PROVIDER", "ors"),
-    orsApiKey: process.env.ORS_API_KEY ?? "",
-  },
-
   geo: {
     // Self-hosted, Ontario-only Nominatim instance (see docker-compose.yml).
     nominatimUrl: str("NOMINATIM_URL", "http://nominatim:8080"),
     // minLon,minLat,maxLon,maxLat — bounds autocomplete to Ontario.
     ontarioViewbox: str("ONTARIO_VIEWBOX", "-95.2,41.6,-74.3,56.9"),
-    // Self-hosted OSRM instance (see docker-compose.yml). Used only for the
-    // route-preview line on the map — pricing stays on OpenRouteService.
+    // Self-hosted OSRM instance (see docker-compose.yml). Source of the road
+    // distance used for pricing, and of the route line on the map.
     osrmUrl: str("OSRM_URL", "http://osrm:5000"),
   },
 
   pricing: {
     base: num("PRICE_BASE", 5.0),
     perKm: num("PRICE_PER_KM", 1.5),
-    min: num("PRICE_MIN", 8.0),
+    min: num("PRICE_MIN", 20.0),
     currency: str("CURRENCY", "CAD"),
   },
 

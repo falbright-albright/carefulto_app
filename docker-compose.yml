@@ -36,11 +36,9 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@careful2.ca}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme123}
       ADMIN_NAME: ${ADMIN_NAME:-Careful2 Admin}
-      ORS_API_KEY: ${ORS_API_KEY:-}
-      DISTANCE_PROVIDER: ${DISTANCE_PROVIDER:-ors}
       PRICE_BASE: ${PRICE_BASE:-5.00}
       PRICE_PER_KM: ${PRICE_PER_KM:-1.50}
-      PRICE_MIN: ${PRICE_MIN:-8.00}
+      PRICE_MIN: ${PRICE_MIN:-20.00}
       CURRENCY: ${CURRENCY:-CAD}
       NOMINATIM_URL: http://nominatim:8080
       OSRM_URL: http://osrm:5000
