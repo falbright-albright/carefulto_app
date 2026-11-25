@@ -6,9 +6,9 @@ test("never goes below the minimum price", () => {
   expect(priceForDistance(0)).toBe(config.pricing.min);
 });
 
-test("minimum delivery price defaults to $20", () => {
+test("minimum delivery price defaults to $15", () => {
   // Only meaningful when PRICE_MIN isn't overridden in the test environment.
-  if (process.env.PRICE_MIN === undefined) expect(config.pricing.min).toBe(20);
+  if (process.env.PRICE_MIN === undefined) expect(config.pricing.min).toBe(15);
 });
 
 test("charges base + per-km above the minimum", () => {
