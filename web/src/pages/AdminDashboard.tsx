@@ -77,6 +77,7 @@ function RecommendDialog({
           <DialogTitle>Recommend order to a courier</DialogTitle>
           <DialogDescription>
             {order.itemCategory} · {order.pickupAddress} → {order.dropoffAddress}
+            {order.notes && <span className="mt-2 block whitespace-pre-wrap">Notes: {order.notes}</span>}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
@@ -281,6 +282,11 @@ export default function AdminDashboard() {
                         <div className="truncate">{o.pickupAddress}</div>
                         <div className="truncate text-muted-foreground">→ {o.dropoffAddress}</div>
                         <div className="text-muted-foreground">{o.distanceKm} km</div>
+                        {o.notes && (
+                          <div className="mt-1 whitespace-pre-wrap text-foreground" title={o.notes}>
+                            <span className="text-muted-foreground">Notes:</span> {o.notes}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         {money(o.price, o.currency)}

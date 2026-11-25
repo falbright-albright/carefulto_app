@@ -1,10 +1,10 @@
 import { config } from "./config.ts";
 
 // ---------------------------------------------------------------------------
-// Driving route preview, backed by a self-hosted OSRM instance built from
-// the same Ontario-only extract as Nominatim (see docker-compose.yml). This
-// is informational only — the map line it draws — and is not used for
-// pricing, which stays on the existing OpenRouteService distance provider.
+// Driving routes, backed by a self-hosted OSRM instance built from the same
+// Ontario-only extract as Nominatim (see docker-compose.yml). This is the
+// single source of road distance: it prices orders (routes/orders.ts) and
+// draws the route line on the map. Nothing external is called.
 // ---------------------------------------------------------------------------
 
 export interface RoutePoint {
@@ -16,6 +16,17 @@ export interface RouteResult {
   distanceKm: number;
   durationMin: number;
   geometry: [number, number][]; // [lat, lng] pairs, in travel order
+}
+
+const [minLng = Number.NaN, minLat = Number.NaN, maxLng = Number.NaN, maxLat = Number.NaN] =
+  config.geo.ontarioViewbox.split(",").map(Number);
+
+// OSRM doesn't error on an out-of-region point — it silently snaps it to the
+// nearest road in whatever's loaded (here, Ontario only), which for a point
+// nowhere near Ontario can produce a nonsensical degenerate route. Callers
+// reject such points up front with the same box autocomplete is limited to.
+export function withinOntario({ lat, lng }: RoutePoint): boolean {
+  return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
 }
 
 export class RouteUnavailableError extends Error {

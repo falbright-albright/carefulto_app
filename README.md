@@ -12,16 +12,13 @@ moderation (ban customers/couriers).
 | Frontend  | React + TypeScript, Vite, Tailwind, **shadcn/ui**|
 | Backend   | **Bun** HTTP server (`Bun.serve`)                |
 | Database  | **PostgreSQL** 16                                |
-| Distance  | OpenRouteService (real road distance + geocoding)|
-| Geo (Ontario-only) | Self-hosted Nominatim (autocomplete) + OSRM (routing), Docker |
+| Geo (Ontario-only) | Self-hosted Nominatim (autocomplete) + OSRM (routing **and pricing distance**), Docker |
 | Infra     | Docker Compose (app + db + geo services)          |
 
 ## Quick start (Docker)
 
 ```bash
 cp .env.example .env
-# (optional) add a free OpenRouteService key so distances are automatic:
-#   https://openrouteservice.org/dev/#/signup  -> put it in ORS_API_KEY
 
 # one-time: fetch the Ontario OSM extract used by the geo services below
 ./scripts/fetch-ontario-osm.sh
@@ -38,15 +35,12 @@ A default admin is seeded on first boot from `.env`:
 ### First run walkthrough
 1. Log in as the admin → **Users** tab → create a **courier** account.
 2. Register a **customer** (from the login page → "Create an account").
-3. As the customer, place an order (enter pickup + delivery addresses,
-   "Calculate price", "Place order").
+3. As the customer, place an order (pick pickup + delivery addresses from the
+   suggestions, add any delivery notes, "Calculate price", "Place order").
 4. As the admin, **Recommend** the order to the courier.
 5. As the courier, **Accept**, then **Report delivered**.
 6. As the customer, **Verify delivery completed**.
 7. The admin is notified the order is fully verified. Done.
-
-> Without an `ORS_API_KEY`, automatic distance is unavailable and the order form
-> asks the customer to enter the distance in km manually. Everything else works.
 
 > **First boot of `nominatim` is slow** (it imports the full Ontario extract into
 > its own Postgres — can take several minutes to a while depending on machine
@@ -55,7 +49,7 @@ A default admin is seeded on first boot from `.env`:
 
 ## Geo services (Ontario-only)
 
-Address autocomplete and (future) routing are backed by two self-hosted,
+Address autocomplete, routing and pricing are backed by two self-hosted,
 **Ontario-only** services — nothing calls out to a third-party routing API at
 runtime, and nothing outside the province can ever be returned:
 
@@ -63,11 +57,16 @@ runtime, and nothing outside the province can ever be returned:
   by the backend at `GET /api/geo/autocomplete?q=...` and bounded to Ontario by
   `ONTARIO_VIEWBOX`. Imported once from the extract below; `FREEZE=true` since
   this is a static regional snapshot, not a continuously-updated mirror.
-- **OSRM** (`osrm` service) — routing engine. Not wired into the app yet; it
-  exists so future work (courier → pickup/drop-off routing, nearest-driver via
-  OSRM's `table` matrix endpoint) has somewhere to call. Pricing still uses the
-  existing OpenRouteService distance lookup (`server/src/distance.ts`),
-  unchanged by this.
+- **OSRM** (`osrm` service) — routing engine. Gives the driving distance
+  between the two pins the customer selected; that distance sets the price
+  (`POST /api/orders/quote`, recomputed server-side on `POST /api/orders`) and
+  the same route is drawn on the map. If OSRM can't route, the quote fails with
+  a "try again" message — customers can't enter a distance themselves.
+
+Addresses missing from the suggestion list (e.g. a specific building on a
+large property) are handled by the order's **Delivery notes** field: the
+customer picks the nearest suggested address and describes the exact spot.
+Notes are shown to the admin and the assigned courier.
 
 Both are built from the **same one-time OSM extract**:
 
@@ -85,10 +84,8 @@ stack; Nominatim is the standard, much lighter way to self-host OSM geocoding,
 and OSRM's `table` endpoint is exactly the multi-point distance matrix that
 "nearest driver to an address" will need later.
 
-**Not yet implemented** (by design, for this PR): courier live-location
-tracking, a nearest-driver endpoint, and switching the pricing distance
-calculation over to the self-hosted OSRM. Those depend on real courier GPS
-data and are future work.
+**Not yet implemented:** courier live-location tracking and a nearest-driver
+endpoint. Those depend on real courier GPS data and are future work.
 
 ## Local development (without Docker for the app)
 
@@ -107,13 +104,10 @@ Open **http://localhost:5173** for the dev frontend.
 All configuration is via environment variables — see [`.env.example`](.env.example).
 
 - **Pricing:** `price = max(PRICE_MIN, PRICE_BASE + PRICE_PER_KM × distance_km)`.
-  Defaults: base $5, $1.50/km, min $8, CAD.
+  `distance_km` is the OSRM driving distance. Defaults: base $5, $1.50/km, min $20, CAD.
 - **Item categories:** edit [`server/src/categories.ts`](server/src/categories.ts)
   — the single source of truth (the frontend fetches it). These are currently
   **placeholders**; replace them with Careful2's real categories.
-- **Distance provider:** OpenRouteService is wrapped behind a small interface in
-  [`server/src/distance.ts`](server/src/distance.ts) — swap in Geoapify,
-  LocationIQ, or a self-hosted OSRM by implementing `DistanceProvider`.
 - **Geo (autocomplete/routing):** see [Geo services (Ontario-only)](#geo-services-ontario-only)
   above. Config: `NOMINATIM_URL`, `OSRM_URL`, `ONTARIO_VIEWBOX`, `NOMINATIM_PASSWORD`.
 
@@ -124,7 +118,7 @@ db/schema.sql            Postgres schema (applied on boot, idempotent)
 scripts/fetch-ontario-osm.sh  One-time OSM extract download for the geo services
 server/                  Bun API server + static SPA host
   src/routes/            Route handlers (auth, orders, admin, courier, geo, ...)
-  src/distance.ts        Swappable distance/geocoding provider (pricing)
+  src/routing.ts         OSRM driving distance/route (pricing + map line)
   src/geo.ts             Nominatim-backed address autocomplete (Ontario-only)
   src/pricing.ts         Pricing formula
 web/                     React + shadcn frontend

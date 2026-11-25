@@ -6,6 +6,7 @@ export interface OrderView {
   status: string;
   itemCategory: string;
   itemDescription: string | null;
+  notes: string | null;
   pickupAddress: string;
   dropoffAddress: string;
   distanceKm: number;
@@ -23,7 +24,7 @@ export interface OrderView {
 }
 
 const SELECT = sql`
-  SELECT o.id, o.status, o.item_category, o.item_description,
+  SELECT o.id, o.status, o.item_category, o.item_description, o.notes,
          o.pickup_address, o.dropoff_address,
          o.distance_km, o.distance_source, o.price, o.currency,
          o.customer_id, cu.name AS customer_name,
@@ -42,6 +43,7 @@ function toView(r: any): OrderView {
     status: r.status,
     itemCategory: r.item_category,
     itemDescription: r.item_description,
+    notes: r.notes,
     pickupAddress: r.pickup_address,
     dropoffAddress: r.dropoff_address,
     distanceKm: Number(r.distance_km),

@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS orders (
   dropoff_lng         DOUBLE PRECISION,
 
   distance_km         NUMERIC(10, 2) NOT NULL,
-  distance_source     TEXT NOT NULL DEFAULT 'ors',   -- ors | manual
+  distance_source     TEXT NOT NULL DEFAULT 'osrm',  -- osrm (legacy rows: ors | manual)
   price               NUMERIC(10, 2) NOT NULL,
   currency            TEXT NOT NULL DEFAULT 'CAD',
 
@@ -74,6 +74,11 @@ CREATE TABLE IF NOT EXISTS orders (
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Free-text delivery notes from the customer (e.g. the exact building or
+-- entrance when their address isn't in the suggestion list). Added after the
+-- initial schema, so it's an idempotent ALTER for existing databases.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS notes TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id);
 CREATE INDEX IF NOT EXISTS idx_orders_courier  ON orders(courier_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status   ON orders(status);

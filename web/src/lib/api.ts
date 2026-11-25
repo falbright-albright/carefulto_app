@@ -25,6 +25,7 @@ export interface Order {
   status: OrderStatus;
   itemCategory: string;
   itemDescription: string | null;
+  notes: string | null;
   pickupAddress: string;
   dropoffAddress: string;
   distanceKm: number;
@@ -61,16 +62,16 @@ export interface AdminUser {
 
 export interface Quote {
   distanceKm: number;
+  durationMin: number;
   price: number;
   currency: string;
   source: string;
-  needsManual?: boolean;
-  reason?: string;
+  geometry: [number, number][]; // [lat, lng] pairs for the route line
 }
 
 export interface AppConfig {
   pricing: { base: number; perKm: number; min: number; currency: string };
-  distance: { provider: string; configured: boolean };
+  distance: { provider: string };
 }
 
 export interface AddressSuggestion {
@@ -82,12 +83,6 @@ export interface AddressSuggestion {
 export interface GeoPoint {
   lat: number;
   lng: number;
-}
-
-export interface RoutePreview {
-  distanceKm: number;
-  durationMin: number;
-  geometry: [number, number][]; // [lat, lng] pairs, in travel order
 }
 
 const TOKEN_KEY = "careful2_token";
@@ -153,26 +148,25 @@ export const api = {
   // geo
   addressAutocomplete: (q: string) =>
     request<{ suggestions: AddressSuggestion[] }>("GET", `/geo/autocomplete?q=${encodeURIComponent(q)}`),
-  routePreview: (pickup: GeoPoint, dropoff: GeoPoint) =>
-    request<RoutePreview>(
-      "GET",
-      `/geo/route?pickupLat=${pickup.lat}&pickupLng=${pickup.lng}&dropoffLat=${dropoff.lat}&dropoffLng=${dropoff.lng}`,
-    ),
 
   // orders
-  quote: (pickupAddress: string, dropoffAddress: string, manualKm?: number) =>
-    request<Quote>(
-      "POST",
-      "/orders/quote",
-      { pickupAddress, dropoffAddress, manualKm },
-      { okStatuses: [422] },
-    ),
+  quote: (pickup: GeoPoint, dropoff: GeoPoint) =>
+    request<Quote>("POST", "/orders/quote", {
+      pickupLat: pickup.lat,
+      pickupLng: pickup.lng,
+      dropoffLat: dropoff.lat,
+      dropoffLng: dropoff.lng,
+    }),
   createOrder: (input: {
     itemCategory: string;
     itemDescription?: string;
+    notes?: string;
     pickupAddress: string;
+    pickupLat: number;
+    pickupLng: number;
     dropoffAddress: string;
-    manualKm?: number;
+    dropoffLat: number;
+    dropoffLng: number;
   }) => request<{ order: Order }>("POST", "/orders", input),
   listOrders: () => request<{ orders: Order[] }>("GET", "/orders"),
   getOrder: (id: string) => request<{ order: Order }>("GET", `/orders/${id}`),
