@@ -149,7 +149,7 @@ Open **http://localhost:5173** for the dev frontend.
 All configuration is via environment variables — see [`.env.example`](.env.example).
 
 - **Pricing:** `price = max(PRICE_MIN, PRICE_BASE + PRICE_PER_KM × distance_km)`.
-  `distance_km` is the OSRM driving distance. Defaults: base $5, $1.50/km, min $15, CAD.
+  `distance_km` is the OSRM driving distance. Defaults: base $5, $1.75/km, min $15, CAD.
 - **Item categories:** edit [`server/src/categories.ts`](server/src/categories.ts)
   — the single source of truth (the frontend fetches it). These are currently
   **placeholders**; replace them with Careful2's real categories.
