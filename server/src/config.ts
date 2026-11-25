@@ -44,6 +44,10 @@ export const config = {
     currency: str("CURRENCY", "CAD"),
   },
 
+  // Time zone used to bucket analytics by day/month (the business runs in
+  // Ontario, so "a day" is an Eastern-time day, not a UTC one).
+  analyticsTimeZone: str("ANALYTICS_TZ", "America/Toronto"),
+
   sessionTtlDays: 30,
 };
 

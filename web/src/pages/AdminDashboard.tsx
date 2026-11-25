@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { UserPlus } from "lucide-react";
+import AnalyticsPanel from "@/pages/AnalyticsPanel";
 
 type Courier = { id: string; name: string; email: string };
 
@@ -249,6 +250,7 @@ export default function AdminDashboard() {
         <TabsList className="mb-4">
           <TabsTrigger value="orders">Orders ({orders.length})</TabsTrigger>
           <TabsTrigger value="users">Users ({users.length})</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
 
         <TabsContent value="orders">
@@ -360,6 +362,9 @@ export default function AdminDashboard() {
               </TableBody>
             </Table>
           </div>
+        </TabsContent>
+        <TabsContent value="analytics">
+          <AnalyticsPanel />
         </TabsContent>
       </Tabs>
     </div>

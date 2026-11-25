@@ -11,6 +11,8 @@ import * as orderR from "./routes/orders.ts";
 import * as adminR from "./routes/admin.ts";
 import * as courierR from "./routes/courier.ts";
 import * as notifR from "./routes/notifications.ts";
+import * as analyticsR from "./routes/analytics.ts";
+import { backfillPickupRegions, ensureBaselineRegions } from "./regions.ts";
 
 type Handler = (req: Request, params: Record<string, string>, user: User) => Promise<Response>;
 type Access = "public" | Role[]; // "public" = no auth; array = allowed roles
@@ -56,6 +58,8 @@ const routes: Route[] = [
   { method: "POST", pattern: "/api/admin/users", access: ["admin"], handler: adminR.createUser },
   { method: "POST", pattern: "/api/admin/users/:id/ban", access: ["admin"], handler: adminR.banUser },
   { method: "POST", pattern: "/api/admin/users/:id/unban", access: ["admin"], handler: adminR.unbanUser },
+  { method: "GET", pattern: "/api/admin/analytics", access: ["admin"], handler: analyticsR.overview },
+  { method: "GET", pattern: "/api/admin/analytics/regions", access: ["admin"], handler: analyticsR.regions },
 
   // --- notifications ---
   { method: "GET", pattern: "/api/notifications", access: ["customer", "courier", "admin"], handler: notifR.list },
@@ -131,3 +135,9 @@ const server = Bun.serve({
   fetch: handle,
 });
 console.log(`[boot] Careful2 server listening on http://localhost:${server.port}`);
+
+// Warm the analytics region data in the background. Never blocks boot, and
+// harmless if Nominatim is still importing (the analytics request retries).
+ensureBaselineRegions()
+  .then(() => backfillPickupRegions(500))
+  .catch((err) => console.warn("[regions] background warm-up failed:", err));
