@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { api, ApiError, type Order, type Quote } from "@/lib/api";
+import { api, ApiError, type AddressSuggestion, type Order, type Quote, type RoutePreview } from "@/lib/api";
 import { money, when } from "@/lib/format";
 import { OrderStatusBadge } from "@/components/OrderStatusBadge";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { LocationMap } from "@/components/LocationMap";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,9 +36,12 @@ export default function CustomerDashboard() {
   const [description, setDescription] = useState("");
   const [pickup, setPickup] = useState("");
   const [dropoff, setDropoff] = useState("");
+  const [pickupPoint, setPickupPoint] = useState<AddressSuggestion | null>(null);
+  const [dropoffPoint, setDropoffPoint] = useState<AddressSuggestion | null>(null);
   const [manualKm, setManualKm] = useState("");
   const [needsManual, setNeedsManual] = useState(false);
   const [quote, setQuote] = useState<Quote | null>(null);
+  const [route, setRoute] = useState<RoutePreview | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [placing, setPlacing] = useState(false);
 
@@ -58,17 +63,21 @@ export default function CustomerDashboard() {
 
   const resetQuote = () => {
     setQuote(null);
+    setRoute(null);
   };
 
   const getQuote = async () => {
-    if (!pickup.trim() || !dropoff.trim()) {
-      toast.error("Enter both a pickup and a delivery address");
+    if (!pickupPoint || !dropoffPoint) {
+      toast.error("Select an address from the suggestions for both pickup and delivery.");
       return;
     }
     setQuoting(true);
     try {
       const km = manualKm ? Number(manualKm) : undefined;
-      const q = await api.quote(pickup, dropoff, needsManual ? km : undefined);
+      const [q, routeResult] = await Promise.all([
+        api.quote(pickup, dropoff, needsManual ? km : undefined),
+        api.routePreview(pickupPoint, dropoffPoint).catch(() => null),
+      ]);
       if (q.needsManual) {
         setNeedsManual(true);
         setQuote(null);
@@ -77,6 +86,12 @@ export default function CustomerDashboard() {
         });
       } else {
         setQuote(q);
+      }
+      setRoute(routeResult);
+      if (!routeResult) {
+        toast.message("Route preview unavailable", {
+          description: "The price above is still accurate — just couldn't draw the route line.",
+        });
       }
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Could not calculate price");
@@ -103,9 +118,12 @@ export default function CustomerDashboard() {
       setDescription("");
       setPickup("");
       setDropoff("");
+      setPickupPoint(null);
+      setDropoffPoint(null);
       setManualKm("");
       setNeedsManual(false);
       setQuote(null);
+      setRoute(null);
       setTab("orders");
       loadOrders();
     } catch (err) {
@@ -173,12 +191,18 @@ export default function CustomerDashboard() {
 
               <div className="space-y-2">
                 <Label htmlFor="pickup">Pickup address</Label>
-                <Input
+                <AddressAutocomplete
                   id="pickup"
                   placeholder="123 King St W, Toronto, ON"
                   value={pickup}
-                  onChange={(e) => {
-                    setPickup(e.target.value);
+                  onChange={(text) => {
+                    setPickup(text);
+                    setPickupPoint(null);
+                    resetQuote();
+                  }}
+                  onSelect={(s) => {
+                    setPickup(s.label);
+                    setPickupPoint(s);
                     resetQuote();
                   }}
                 />
@@ -186,16 +210,37 @@ export default function CustomerDashboard() {
 
               <div className="space-y-2">
                 <Label htmlFor="dropoff">Delivery address</Label>
-                <Input
+                <AddressAutocomplete
                   id="dropoff"
                   placeholder="456 Queen St E, Toronto, ON"
                   value={dropoff}
-                  onChange={(e) => {
-                    setDropoff(e.target.value);
+                  onChange={(text) => {
+                    setDropoff(text);
+                    setDropoffPoint(null);
+                    resetQuote();
+                  }}
+                  onSelect={(s) => {
+                    setDropoff(s.label);
+                    setDropoffPoint(s);
                     resetQuote();
                   }}
                 />
               </div>
+
+              {(pickupPoint || dropoffPoint) && (
+                <LocationMap
+                  className="h-56 overflow-hidden rounded-md border"
+                  pickup={pickupPoint ?? undefined}
+                  dropoff={dropoffPoint ?? undefined}
+                  route={route?.geometry}
+                />
+              )}
+
+              {(!pickupPoint || !dropoffPoint) && (
+                <p className="text-xs text-muted-foreground">
+                  Select an address from the suggestions for both fields to calculate a price and route.
+                </p>
+              )}
 
               {needsManual && (
                 <div className="space-y-2">
@@ -219,7 +264,11 @@ export default function CustomerDashboard() {
               )}
 
               <div className="flex items-center gap-3">
-                <Button variant="outline" onClick={getQuote} disabled={quoting}>
+                <Button
+                  variant="outline"
+                  onClick={getQuote}
+                  disabled={quoting || !pickupPoint || !dropoffPoint}
+                >
                   <MapPin className="h-4 w-4" />
                   {quoting ? "Calculating…" : "Calculate price"}
                 </Button>
@@ -230,6 +279,12 @@ export default function CustomerDashboard() {
                     <span className="text-lg font-bold text-primary">
                       {money(quote.price, quote.currency)}
                     </span>
+                    {route && (
+                      <>
+                        <span className="mx-2 text-muted-foreground">·</span>
+                        <span className="text-muted-foreground">~{Math.round(route.durationMin)} min drive</span>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
