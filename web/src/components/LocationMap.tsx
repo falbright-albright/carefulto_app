@@ -79,7 +79,11 @@ function FitToView({
 // them. Uses public OSM raster tiles (no API key).
 export function LocationMap({ pickup, dropoff, route, className }: LocationMapProps) {
   return (
-    <div className={className}>
+    // `isolate` gives the map its own stacking context. Leaflet's panes and
+    // controls use z-index 400–1000, which would otherwise paint over
+    // anything positioned near the map — notably the address-autocomplete
+    // dropdown directly above it, hiding the suggestions.
+    <div className={`isolate ${className ?? ""}`}>
       <MapContainer
         center={ONTARIO_CENTER}
         zoom={6}
