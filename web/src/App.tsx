@@ -9,6 +9,7 @@ import RegisterPage from "@/pages/RegisterPage";
 import CustomerDashboard from "@/pages/CustomerDashboard";
 import CourierDashboard from "@/pages/CourierDashboard";
 import AdminDashboard from "@/pages/AdminDashboard";
+import OrderPage from "@/pages/OrderPage";
 
 function Header() {
   const { user, logout } = useAuth();
@@ -68,6 +69,10 @@ export default function App() {
             element={user ? <Navigate to="/" replace /> : <RegisterPage />}
           />
           <Route path="/" element={user ? <Dashboard /> : <Navigate to="/login" replace />} />
+          <Route
+            path="/orders/:id"
+            element={user ? <OrderPage /> : <Navigate to="/login" replace />}
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
