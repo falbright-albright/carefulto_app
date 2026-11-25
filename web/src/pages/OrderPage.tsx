@@ -1,0 +1,239 @@
+import { useCallback, useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { toast } from "sonner";
+import { ArrowLeft, Check, PackageCheck, X } from "lucide-react";
+import { api, ApiError, type Order } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { money, when } from "@/lib/format";
+import { OrderStatusBadge } from "@/components/OrderStatusBadge";
+import { RecommendDialog, type Courier } from "@/components/RecommendDialog";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+type LoadState =
+  | { kind: "loading" }
+  | { kind: "ok"; order: Order }
+  | { kind: "not_found" }
+  | { kind: "forbidden" }
+  | { kind: "error"; message: string };
+
+// Detail view for a single order at /orders/:id. Notifications link here.
+// Access is enforced by GET /api/orders/:id: admins see every order, couriers
+// only orders assigned to them, customers only their own.
+export default function OrderPage() {
+  const { id = "" } = useParams();
+  const { user } = useAuth();
+  const [state, setState] = useState<LoadState>({ kind: "loading" });
+  const [couriers, setCouriers] = useState<Courier[]>([]);
+
+  const load = useCallback(async () => {
+    try {
+      const { order } = await api.getOrder(id);
+      setState({ kind: "ok", order });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) setState({ kind: "not_found" });
+      else if (err instanceof ApiError && err.status === 403) setState({ kind: "forbidden" });
+      // Malformed ids make Postgres reject the UUID; treat that as not found.
+      else if (err instanceof ApiError && err.status === 500) setState({ kind: "not_found" });
+      else
+        setState({
+          kind: "error",
+          message: err instanceof ApiError ? err.message : "Could not load this order.",
+        });
+    }
+  }, [id]);
+
+  useEffect(() => {
+    setState({ kind: "loading" });
+    load();
+    const t = setInterval(load, 15000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  useEffect(() => {
+    if (user?.role !== "admin") return;
+    api
+      .listCouriers()
+      .then((r) => setCouriers(r.couriers))
+      .catch(() => {});
+  }, [user?.role]);
+
+  const act = async (fn: () => Promise<unknown>, success: string) => {
+    try {
+      await fn();
+      toast.success(success);
+      load();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Action failed");
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-3xl">
+      <Button asChild variant="ghost" size="sm" className="-ml-3 mb-4">
+        <Link to="/">
+          <ArrowLeft className="h-4 w-4" /> Back to dashboard
+        </Link>
+      </Button>
+
+      {state.kind === "loading" && <p className="py-12 text-center text-muted-foreground">Loading order…</p>}
+      {state.kind === "not_found" && (
+        <Message title="Order not found" body="This order doesn't exist or has been removed." />
+      )}
+      {state.kind === "forbidden" && (
+        <Message
+          title="You don't have access to this order"
+          body={
+            user?.role === "courier"
+              ? "It may have been reassigned to another courier, or you rejected it."
+              : "This order belongs to another account."
+          }
+        />
+      )}
+      {state.kind === "error" && <Message title="Something went wrong" body={state.message} />}
+      {state.kind === "ok" && (
+        <OrderDetails
+          order={state.order}
+          actions={
+            <OrderActions
+              order={state.order}
+              role={user?.role}
+              userId={user?.id}
+              couriers={couriers}
+              act={act}
+              reload={load}
+            />
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+function Message({ title, body }: { title: string; body: string }) {
+  return (
+    <Card>
+      <CardContent className="py-12 text-center">
+        <p className="text-lg font-semibold">{title}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{body}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-1 py-3 sm:grid-cols-[180px_1fr] sm:gap-4">
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd className="text-sm">{children}</dd>
+    </div>
+  );
+}
+
+function OrderDetails({ order: o, actions }: { order: Order; actions: React.ReactNode }) {
+  return (
+    <Card>
+      <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
+        <div>
+          <CardTitle className="text-2xl">{o.itemCategory}</CardTitle>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Placed {when(o.createdAt)} · Order {o.id.slice(0, 8)}
+          </p>
+        </div>
+        <OrderStatusBadge status={o.status} />
+      </CardHeader>
+      <CardContent>
+        <dl className="divide-y">
+          {o.itemDescription && <Row label="Item description">{o.itemDescription}</Row>}
+          <Row label="Pickup address">{o.pickupAddress}</Row>
+          <Row label="Delivery address">{o.dropoffAddress}</Row>
+          {o.notes && (
+            <Row label="Delivery notes">
+              <span className="whitespace-pre-wrap">{o.notes}</span>
+            </Row>
+          )}
+          <Row label="Distance">{o.distanceKm} km</Row>
+          <Row label="Price">
+            <span className="font-semibold">{money(o.price, o.currency)}</span>
+          </Row>
+          <Row label="Customer">{o.customerName}</Row>
+          <Row label="Courier">{o.courierName ?? "Not assigned yet"}</Row>
+          <Row label="Verification">
+            Courier {o.courierVerifiedAt ? `✓ ${when(o.courierVerifiedAt)}` : "—"} · Customer{" "}
+            {o.customerVerifiedAt ? `✓ ${when(o.customerVerifiedAt)}` : "—"}
+          </Row>
+          <Row label="Last updated">{when(o.updatedAt)}</Row>
+        </dl>
+        {actions}
+      </CardContent>
+    </Card>
+  );
+}
+
+// The same actions each role already has on its dashboard, for this order.
+function OrderActions({
+  order: o,
+  role,
+  userId,
+  couriers,
+  act,
+  reload,
+}: {
+  order: Order;
+  role: string | undefined;
+  userId: string | undefined;
+  couriers: Courier[];
+  act: (fn: () => Promise<unknown>, success: string) => void;
+  reload: () => void;
+}) {
+  let content: React.ReactNode = null;
+
+  if (role === "admin" && (o.status === "placed" || o.status === "rejected")) {
+    content = (
+      <>
+        <RecommendDialog order={o} couriers={couriers} onDone={reload} />
+        {couriers.length === 0 && (
+          <p className="text-sm text-amber-600">No couriers exist yet — create one first.</p>
+        )}
+      </>
+    );
+  } else if (role === "courier" && o.courierId === userId) {
+    if (o.status === "recommended") {
+      content = (
+        <>
+          <Button size="sm" onClick={() => act(() => api.acceptOrder(o.id), "Order accepted")}>
+            <Check className="h-4 w-4" /> Accept
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => act(() => api.rejectOrder(o.id), "Order rejected")}
+          >
+            <X className="h-4 w-4" /> Reject
+          </Button>
+        </>
+      );
+    } else if (o.status === "accepted") {
+      content = (
+        <Button size="sm" onClick={() => act(() => api.completeOrder(o.id), "Marked as delivered")}>
+          <PackageCheck className="h-4 w-4" /> Report delivered
+        </Button>
+      );
+    } else if (o.status === "completed") {
+      content = <p className="text-sm text-muted-foreground">Waiting for customer verification…</p>;
+    }
+  } else if (role === "customer" && o.status === "completed") {
+    content = (
+      <Button size="sm" onClick={() => act(() => api.verifyOrder(o.id), "Delivery verified. Thank you!")}>
+        Verify delivery completed
+      </Button>
+    );
+  }
+
+  if (o.status === "verified") {
+    content = <p className="text-sm font-medium text-emerald-600">✓ Delivery confirmed complete.</p>;
+  }
+
+  if (!content) return null;
+  return <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-4">{content}</div>;
+}

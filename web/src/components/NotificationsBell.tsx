@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { Bell } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Bell, ChevronRight } from "lucide-react";
 import { api, type Notification } from "@/lib/api";
 import { when } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -64,14 +65,36 @@ export function NotificationsBell({ pulse }: { pulse?: number }) {
         ) : (
           <ul className="divide-y">
             {items.map((n) => (
-              <li key={n.id} className="py-3">
-                <p className="text-sm">{n.message}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{when(n.created_at)}</p>
+              <li key={n.id}>
+                {n.order_id ? (
+                  // Every order notification is a shortcut to that order's page.
+                  <Link
+                    to={`/orders/${n.order_id}`}
+                    onClick={() => setOpen(false)}
+                    className="-mx-2 flex items-center gap-3 rounded-md px-2 py-3 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                  >
+                    <NotificationText n={n} />
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  </Link>
+                ) : (
+                  <div className="py-3">
+                    <NotificationText n={n} />
+                  </div>
+                )}
               </li>
             ))}
           </ul>
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function NotificationText({ n }: { n: Notification }) {
+  return (
+    <div className="min-w-0 flex-1">
+      <p className="text-sm">{n.message}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{when(n.created_at)}</p>
+    </div>
   );
 }
