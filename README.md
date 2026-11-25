@@ -27,7 +27,7 @@ docker compose --profile setup run --rm osrm-build   # one-time: build the routi
 docker compose up --build
 ```
 
-Then open **http://localhost:3001**.
+Then open **http://localhost:3001** for the CarefulTO website (dashboards are at `/app`).
 
 A default admin is seeded on first boot from `.env`:
 `admin@careful2.ca` / `changeme123` — **change these**.
@@ -86,6 +86,27 @@ and OSRM's `table` endpoint is exactly the multi-point distance matrix that
 
 **Not yet implemented:** courier live-location tracking and a nearest-driver
 endpoint. Those depend on real courier GPS data and are future work.
+
+## Website (carefulto.ca)
+
+The public website is part of the app: `/` is the CarefulTO homepage, and
+`/support`, `/terms`, `/privacy` and `/cancel` are the pages it links to — all
+replicated from carefulto.ca (same copy, colours, photo, logo, favicon and
+icons). The signed-in platform lives at `/app`.
+
+- **Sign in** (top nav) offers Customer, Courier and Admin. It's one login
+  form: whichever door is used, the account's own role picks the dashboard.
+  Customers can also **Create an account**; couriers/admins are created by an admin.
+- **Book a Delivery** sends visitors to sign up / sign in (customers who are
+  signed in go straight to their dashboard), replacing the site's Stripe form.
+- **Cancel a Booking** opens a pre-filled email to info@carefulto.ca (the live
+  site used Netlify Forms).
+
+Where things live: `web/src/site/` (pages, nav, styles). `carefulto.css` is
+the site's own stylesheet scoped under `.site`; `site-platform.css` holds the
+platform additions. Terms and Privacy are kept verbatim as HTML in
+`web/src/site/content/` — edit the wording there. Brand images are in
+`web/public/brand/`.
 
 ## Admin analytics
 
@@ -170,6 +191,7 @@ server/                  Bun API server + static SPA host
   src/routes/analytics.ts  Admin analytics endpoints
   scripts/seed-demo.ts   Synthetic data for a *demo* database
 web/                     React + shadcn frontend
+  src/site/              Public CarefulTO website (home, support, terms, privacy, cancel, sign-in)
   src/components/AddressAutocomplete.tsx  Debounced address search-as-you-type
   src/components/LocationMap.tsx          Small Ontario-bounded map preview (Leaflet)
 Dockerfile               Multi-stage: build web -> Bun runtime serving both
