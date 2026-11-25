@@ -6,12 +6,18 @@
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "seed:demo": "bun run scripts/seed-demo.ts",
+    "lint": "biome check src test",
+    "format": "biome format --write src test"
   },
   "dependencies": {
-    "postgres": "^3.4.5"
+    "postgres": "^3.4.5",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.6.9",
     "@types/bun": "^1.1.14",
     "typescript": "^5.7.2"
   }

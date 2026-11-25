@@ -63,6 +63,11 @@ export default function CourierDashboard() {
               <span className="text-muted-foreground">Item:</span> {o.itemDescription}
             </p>
           )}
+          {o.notes && (
+            <p className="whitespace-pre-wrap">
+              <span className="text-muted-foreground">Customer notes:</span> {o.notes}
+            </p>
+          )}
           <p>
             <span className="text-muted-foreground">Distance / payout:</span> {o.distanceKm} km ·{" "}
             {money(o.price, o.currency)}

@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS orders (
   dropoff_lng         DOUBLE PRECISION,
 
   distance_km         NUMERIC(10, 2) NOT NULL,
-  distance_source     TEXT NOT NULL DEFAULT 'ors',   -- ors | manual
+  distance_source     TEXT NOT NULL DEFAULT 'osrm',  -- osrm (legacy rows: ors | manual)
   price               NUMERIC(10, 2) NOT NULL,
   currency            TEXT NOT NULL DEFAULT 'CAD',
 
@@ -74,6 +74,11 @@ CREATE TABLE IF NOT EXISTS orders (
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Free-text delivery notes from the customer (e.g. the exact building or
+-- entrance when their address isn't in the suggestion list). Added after the
+-- initial schema, so it's an idempotent ALTER for existing databases.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS notes TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id);
 CREATE INDEX IF NOT EXISTS idx_orders_courier  ON orders(courier_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status   ON orders(status);
@@ -94,3 +99,28 @@ CREATE TABLE IF NOT EXISTS order_events (
 );
 CREATE INDEX IF NOT EXISTS idx_events_recipient ON order_events(recipient_id, read_at);
 CREATE INDEX IF NOT EXISTS idx_events_order      ON order_events(order_id);
+
+-- ---------------------------------------------------------------------------
+-- Regions (municipalities) for admin analytics. A region is an OSM
+-- administrative boundary resolved by reverse-geocoding against the same
+-- self-hosted, Ontario-only Nominatim instance used for autocomplete — e.g.
+-- Mississauga, Vaughan, Hamilton. `geojson` is the simplified boundary used to
+-- draw the region on the analytics map. `baseline` marks the curated
+-- GTA/Hamilton set that is always drawn (even with zero pickups).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS regions (
+  id          TEXT PRIMARY KEY,           -- OSM type initial + id, e.g. "R1954127"
+  name        TEXT NOT NULL,
+  county      TEXT,                       -- e.g. "York Region" (null for single-tier cities)
+  geojson     JSONB,
+  baseline    BOOLEAN NOT NULL DEFAULT false,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Which region each order's pickup falls in. Resolved best-effort after the
+-- order is placed (and backfilled for older orders); `pickup_region_checked_at`
+-- stops a point that resolves to no region from being re-queried forever.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_region_id TEXT REFERENCES regions(id);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_region_checked_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_orders_pickup_region ON orders(pickup_region_id);
+CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);

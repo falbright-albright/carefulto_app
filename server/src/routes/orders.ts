@@ -2,120 +2,134 @@ import { sql } from "../db.ts";
 import { json, error, readJson, reqStr } from "../http.ts";
 import type { User } from "../auth.ts";
 import { isValidCategory } from "../categories.ts";
-import { distanceProvider, DistanceUnavailableError, type GeoPoint } from "../distance.ts";
+import { route, RouteUnavailableError, withinOntario, type RoutePoint } from "../routing.ts";
 import { priceForDistance } from "../pricing.ts";
 import { config } from "../config.ts";
-import {
-  getOrder,
-  listAllOrders,
-  listOrdersForCourier,
-  listOrdersForCustomer,
-} from "../orders.ts";
+import { getOrder, listAllOrders, listOrdersForCourier, listOrdersForCustomer } from "../orders.ts";
 import { notify, notifyAdmins } from "../notifications.ts";
+import { assignPickupRegion } from "../regions.ts";
+
+const NOTES_MAX = 2000;
 
 interface QuoteResult {
   distanceKm: number;
+  durationMin: number;
   price: number;
   currency: string;
-  source: string;
-  pickup?: GeoPoint;
-  dropoff?: GeoPoint;
+  source: "osrm";
+  geometry: [number, number][];
 }
 
-// Compute a distance + price quote. Uses a manual km if provided, otherwise
-// OpenRouteService. Returns needsManual=true (422) when automatic fails.
-async function computeQuote(
-  pickupAddress: string,
-  dropoffAddress: string,
-  manualKm: number | null,
-): Promise<QuoteResult | { needsManual: true; reason: string }> {
-  if (manualKm !== null) {
-    if (!(manualKm > 0) || manualKm > 5000) {
-      throw new Error("manual distance must be between 0 and 5000 km");
-    }
-    const km = Math.round(manualKm * 100) / 100;
-    return {
-      distanceKm: km,
-      price: priceForDistance(km),
-      currency: config.pricing.currency,
-      source: "manual",
-    };
-  }
-
-  try {
-    const r = await distanceProvider.quote(pickupAddress, dropoffAddress);
-    return {
-      distanceKm: r.distanceKm,
-      price: priceForDistance(r.distanceKm),
-      currency: config.pricing.currency,
-      source: r.source,
-      pickup: r.pickup,
-      dropoff: r.dropoff,
-    };
-  } catch (err) {
-    if (err instanceof DistanceUnavailableError) {
-      return { needsManual: true, reason: err.message };
-    }
-    throw err;
-  }
+// Reads `${prefix}Lat` / `${prefix}Lng` from the body. These are the
+// coordinates of the address suggestion the customer picked — the price is
+// computed from these pins, never by re-geocoding the address text.
+function readPoint(body: Record<string, unknown>, prefix: "pickup" | "dropoff"): RoutePoint | null {
+  const lat = body[`${prefix}Lat`];
+  const lng = body[`${prefix}Lng`];
+  if (typeof lat !== "number" || typeof lng !== "number") return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
 }
+
+type PointsResult = { pickup: RoutePoint; dropoff: RoutePoint } | { error: Response };
+
+function readPoints(body: Record<string, unknown>): PointsResult {
+  const pickup = readPoint(body, "pickup");
+  const dropoff = readPoint(body, "dropoff");
+  if (!pickup || !dropoff) {
+    return {
+      error: error(
+        "pickupLat, pickupLng, dropoffLat and dropoffLng are required — select both addresses from the suggestions",
+      ),
+    };
+  }
+  if (!withinOntario(pickup) || !withinOntario(dropoff)) {
+    return { error: error("pickup and delivery must both be within Ontario") };
+  }
+  return { pickup, dropoff };
+}
+
+// Driving distance between the two pins via the self-hosted OSRM, priced
+// with priceForDistance. Throws RouteUnavailableError if OSRM can't route.
+async function computeQuote(pickup: RoutePoint, dropoff: RoutePoint): Promise<QuoteResult> {
+  const r = await route(pickup, dropoff);
+  return {
+    distanceKm: r.distanceKm,
+    durationMin: r.durationMin,
+    price: priceForDistance(r.distanceKm),
+    currency: config.pricing.currency,
+    source: "osrm",
+    geometry: r.geometry,
+  };
+}
+
+const PRICE_UNAVAILABLE =
+  "We couldn't calculate a price for these addresses right now. Please try again in a moment.";
 
 // POST /api/orders/quote  (customer)
 export async function quote(req: Request): Promise<Response> {
   const body = await readJson(req);
-  const pickup = reqStr(body.pickupAddress);
-  const dropoff = reqStr(body.dropoffAddress);
-  const manualKm = typeof body.manualKm === "number" ? body.manualKm : null;
-  if (!pickup || !dropoff) return error("pickupAddress and dropoffAddress are required");
+  const points = readPoints(body);
+  if ("error" in points) return points.error;
 
   try {
-    const q = await computeQuote(pickup, dropoff, manualKm);
-    if ("needsManual" in q) return json(q, 422);
-    return json(q);
+    return json(await computeQuote(points.pickup, points.dropoff));
   } catch (err) {
-    return error(err instanceof Error ? err.message : "could not compute quote", 400);
+    if (err instanceof RouteUnavailableError) return error(PRICE_UNAVAILABLE, 502);
+    throw err;
   }
 }
 
-// POST /api/orders  (customer) — place an order.
-export async function create(req: Request, _p: Record<string, string>, user: User): Promise<Response> {
+// POST /api/orders  (customer) — place an order. The price is recomputed
+// server-side from the pins; any client-sent price is ignored.
+export async function create(
+  req: Request,
+  _p: Record<string, string>,
+  user: User,
+): Promise<Response> {
   const body = await readJson(req);
   const itemCategory = reqStr(body.itemCategory);
   const itemDescription = reqStr(body.itemDescription); // optional
+  const notes = reqStr(body.notes); // optional
   const pickup = reqStr(body.pickupAddress);
   const dropoff = reqStr(body.dropoffAddress);
-  const manualKm = typeof body.manualKm === "number" ? body.manualKm : null;
 
   if (!itemCategory || !pickup || !dropoff) {
     return error("itemCategory, pickupAddress and dropoffAddress are required");
   }
   if (!isValidCategory(itemCategory)) return error("unknown item category");
-
-  let q;
-  try {
-    q = await computeQuote(pickup, dropoff, manualKm);
-  } catch (err) {
-    return error(err instanceof Error ? err.message : "could not compute quote", 400);
+  if (notes && notes.length > NOTES_MAX) {
+    return error(`notes must be at most ${NOTES_MAX} characters`);
   }
-  if ("needsManual" in q) {
-    return json({ ...q, error: "distance unavailable; provide manualKm" }, 422);
+  const points = readPoints(body);
+  if ("error" in points) return points.error;
+
+  let q: QuoteResult;
+  try {
+    q = await computeQuote(points.pickup, points.dropoff);
+  } catch (err) {
+    if (err instanceof RouteUnavailableError) return error(PRICE_UNAVAILABLE, 502);
+    throw err;
   }
 
   const rows = await sql<{ id: string }[]>`
     INSERT INTO orders (
-      customer_id, item_category, item_description,
+      customer_id, item_category, item_description, notes,
       pickup_address, pickup_lat, pickup_lng,
       dropoff_address, dropoff_lat, dropoff_lng,
       distance_km, distance_source, price, currency, status
     ) VALUES (
-      ${user.id}, ${itemCategory}, ${itemDescription},
-      ${pickup}, ${q.pickup?.lat ?? null}, ${q.pickup?.lng ?? null},
-      ${dropoff}, ${q.dropoff?.lat ?? null}, ${q.dropoff?.lng ?? null},
+      ${user.id}, ${itemCategory}, ${itemDescription}, ${notes},
+      ${pickup}, ${points.pickup.lat}, ${points.pickup.lng},
+      ${dropoff}, ${points.dropoff.lat}, ${points.dropoff.lng},
       ${q.distanceKm}, ${q.source}, ${q.price}, ${q.currency}, 'placed'
     )
     RETURNING id
   `;
   const orderId = rows[0]!.id;
+  // Tag the pickup's municipality for analytics. Fire-and-forget: it never
+  // throws and must not delay or fail order placement.
+  void assignPickupRegion(orderId, points.pickup.lat, points.pickup.lng);
 
   await notifyAdmins({
     orderId,
@@ -129,7 +143,11 @@ export async function create(req: Request, _p: Record<string, string>, user: Use
 }
 
 // GET /api/orders  — role-scoped list.
-export async function list(_req: Request, _p: Record<string, string>, user: User): Promise<Response> {
+export async function list(
+  _req: Request,
+  _p: Record<string, string>,
+  user: User,
+): Promise<Response> {
   let orders;
   if (user.role === "admin") orders = await listAllOrders();
   else if (user.role === "courier") orders = await listOrdersForCourier(user.id);
@@ -138,24 +156,31 @@ export async function list(_req: Request, _p: Record<string, string>, user: User
 }
 
 // GET /api/orders/:id  — role-scoped single order.
-export async function getOne(_req: Request, p: Record<string, string>, user: User): Promise<Response> {
+export async function getOne(
+  _req: Request,
+  p: Record<string, string>,
+  user: User,
+): Promise<Response> {
   const order = await getOrder(p.id!);
   if (!order) return error("order not found", 404);
   const allowed =
-    user.role === "admin" ||
-    order.customerId === user.id ||
-    order.courierId === user.id;
+    user.role === "admin" || order.customerId === user.id || order.courierId === user.id;
   if (!allowed) return error("forbidden", 403);
   return json({ order });
 }
 
 // POST /api/orders/:id/complete  (courier) — report the delivery completed.
 // The courier's completion report counts as the courier's verification.
-export async function complete(_req: Request, p: Record<string, string>, user: User): Promise<Response> {
+export async function complete(
+  _req: Request,
+  p: Record<string, string>,
+  user: User,
+): Promise<Response> {
   const order = await getOrder(p.id!);
   if (!order) return error("order not found", 404);
   if (order.courierId !== user.id) return error("you are not assigned to this order", 403);
-  if (order.status !== "accepted") return error(`cannot complete an order in status "${order.status}"`);
+  if (order.status !== "accepted")
+    return error(`cannot complete an order in status "${order.status}"`);
 
   await sql`
     UPDATE orders
@@ -175,7 +200,11 @@ export async function complete(_req: Request, p: Record<string, string>, user: U
 // POST /api/orders/:id/verify  (customer) — verify the delivery completed.
 // When both customer and courier have verified, the order is finalized and
 // admins are notified.
-export async function verify(_req: Request, p: Record<string, string>, user: User): Promise<Response> {
+export async function verify(
+  _req: Request,
+  p: Record<string, string>,
+  user: User,
+): Promise<Response> {
   const order = await getOrder(p.id!);
   if (!order) return error("order not found", 404);
   if (order.customerId !== user.id) return error("only the customer can verify this order", 403);
