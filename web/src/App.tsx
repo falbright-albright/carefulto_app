@@ -13,6 +13,7 @@ import HomePage from "@/site/HomePage";
 import SupportPage from "@/site/SupportPage";
 import CancelPage from "@/site/CancelPage";
 import LegalPage, { NotFoundPage } from "@/site/LegalPage";
+import OrderPage from "@/pages/OrderPage";
 
 function Header() {
   const { user, logout } = useAuth();
@@ -60,15 +61,35 @@ function Dashboard() {
   return <CustomerDashboard />;
 }
 
-function AppShell() {
+function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen">
       <Header />
-      <main className="container py-8">
-        <Dashboard />
-      </main>
+      <main className="container py-8">{children}</main>
     </div>
   );
+}
+
+// Gate for platform pages: wait for the session check, send signed-out
+// visitors to the login page, otherwise render inside the app header.
+function SignedIn({
+  loading,
+  user,
+  children,
+}: {
+  loading: boolean;
+  user: unknown;
+  children: React.ReactNode;
+}) {
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-muted-foreground">
+        Loading…
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/login" replace />;
+  return <AppShell>{children}</AppShell>;
 }
 
 export default function App() {
@@ -87,19 +108,22 @@ export default function App() {
       <Route path="/login" element={user ? <Navigate to="/app" replace /> : <LoginPage />} />
       <Route path="/register" element={user ? <Navigate to="/app" replace /> : <RegisterPage />} />
 
-      {/* The platform: one dashboard route, chosen by the account's role. */}
+      {/* The platform: the dashboard (chosen by the account's role) and the
+          order page that notifications link to. Both need a signed-in user. */}
       <Route
         path="/app"
         element={
-          loading ? (
-            <div className="flex min-h-screen items-center justify-center text-muted-foreground">
-              Loading…
-            </div>
-          ) : user ? (
-            <AppShell />
-          ) : (
-            <Navigate to="/login" replace />
-          )
+          <SignedIn loading={loading} user={user}>
+            <Dashboard />
+          </SignedIn>
+        }
+      />
+      <Route
+        path="/orders/:id"
+        element={
+          <SignedIn loading={loading} user={user}>
+            <OrderPage />
+          </SignedIn>
         }
       />
 

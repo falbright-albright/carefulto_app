@@ -39,8 +39,8 @@ export const config = {
 
   pricing: {
     base: num("PRICE_BASE", 5.0),
-    perKm: num("PRICE_PER_KM", 1.5),
-    min: num("PRICE_MIN", 20.0),
+    perKm: num("PRICE_PER_KM", 1.75),
+    min: num("PRICE_MIN", 15.0),
     currency: str("CURRENCY", "CAD"),
   },
 
