@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Ban, Check, Navigation, PackageCheck, X } from "lucide-react";
-import { currentPosition, deliveryDirectionsUrl } from "@/lib/googleMaps";
+import { ArrowLeft, Ban, Check, PackageCheck, X } from "lucide-react";
+import { DirectionsButton } from "@/components/DirectionsButton";
 import { api, ApiError, type Order } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { money, orderNo, when } from "@/lib/format";
@@ -98,6 +98,19 @@ export default function OrderPage() {
       {state.kind === "ok" && (
         <OrderDetails
           order={state.order}
+          directions={
+            user?.role === "courier" &&
+            state.order.courierId === user.id &&
+            (state.order.status === "recommended" || state.order.status === "accepted") ? (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Ready to go? Get directions from where you are to the pickup, then to the
+                  drop-off.
+                </p>
+                <DirectionsButton order={state.order} size="default" variant="default" />
+              </div>
+            ) : undefined
+          }
           actions={
             <OrderActions
               order={state.order}
@@ -134,7 +147,15 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-function OrderDetails({ order: o, actions }: { order: Order; actions: React.ReactNode }) {
+function OrderDetails({
+  order: o,
+  actions,
+  directions,
+}: {
+  order: Order;
+  actions: React.ReactNode;
+  directions?: React.ReactNode;
+}) {
   return (
     <Card>
       <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
@@ -148,6 +169,7 @@ function OrderDetails({ order: o, actions }: { order: Order; actions: React.Reac
         <OrderStatusBadge status={o.status} />
       </CardHeader>
       <CardContent>
+        {directions && <div className="mb-4 rounded-lg border bg-muted/40 p-4">{directions}</div>}
         <dl className="divide-y">
           {o.itemDescription && <Row label="Item description">{o.itemDescription}</Row>}
           <Row label="Pickup address">{o.pickupAddress}</Row>
@@ -237,13 +259,11 @@ function OrderActions({
           >
             <X className="h-4 w-4" /> Reject
           </Button>
-          <DirectionsButton order={o} />
         </>
       );
     } else if (o.status === "accepted") {
       content = (
         <>
-          <DirectionsButton order={o} />
           <Button
             size="sm"
             onClick={() => act(() => api.completeOrder(o.id), "Marked as delivered")}
@@ -290,44 +310,5 @@ function AdminCancelButton({ order, onDone }: { order: Order; onDone: () => void
       </Button>
       <CancelOrderDialog order={order} open={open} onOpenChange={setOpen} onDone={onDone} />
     </>
-  );
-}
-
-// Courier: open the whole job in Google Maps — from where they are now (if
-// the browser shares it) to the pickup, then on to the drop-off.
-function DirectionsButton({ order: o }: { order: Order }) {
-  const [busy, setBusy] = useState(false);
-
-  const open = async () => {
-    // Open the tab now, inside the click: browsers block pop-ups opened
-    // later, and asking for the location takes a moment.
-    const tab = window.open("", "_blank");
-    if (tab) tab.document.title = "Opening Google Maps…";
-    setBusy(true);
-    const here = await currentPosition();
-    setBusy(false);
-    const url = deliveryDirectionsUrl(
-      { address: o.pickupAddress, lat: o.pickupLat, lng: o.pickupLng },
-      { address: o.dropoffAddress, lat: o.dropoffLat, lng: o.dropoffLng },
-      here,
-    );
-    if (tab) {
-      tab.opener = null;
-      tab.location.href = url;
-    } else {
-      window.location.href = url; // pop-ups blocked: go in this tab instead
-    }
-    toast.message(
-      here
-        ? "Directions opened: your location → pickup → drop-off"
-        : "Your location isn't available, so directions start at the pickup",
-    );
-  };
-
-  return (
-    <Button size="sm" variant="outline" onClick={open} disabled={busy}>
-      <Navigation className="h-4 w-4" />
-      {busy ? "Getting your location…" : "Directions in Google Maps"}
-    </Button>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DirectionsButton } from "@/components/DirectionsButton";
 import { OrderTitleLink, useOpenOrderOnClick } from "@/components/OrderLink";
 import { toast } from "sonner";
 import { api, ApiError, type Order } from "@/lib/api";
@@ -79,7 +80,7 @@ export default function CourierDashboard() {
             {money(o.price, o.currency)}
           </p>
         </div>
-        {children && <div className="mt-4 flex gap-2">{children}</div>}
+        {children && <div className="mt-4 flex flex-wrap gap-2">{children}</div>}
       </CardContent>
     </Card>
   );
@@ -128,8 +129,10 @@ export default function CourierDashboard() {
           <div className="space-y-3">
             {active.map((o) => (
               <OrderCard key={o.id} o={o}>
+                <DirectionsButton order={o} variant="default" />
                 <Button
                   size="sm"
+                  variant="outline"
                   onClick={() => act(() => api.completeOrder(o.id), "Marked as delivered")}
                 >
                   <PackageCheck className="h-4 w-4" /> Report delivered
