@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { OrderTitleLink, useOpenOrderOnClick } from "@/components/OrderLink";
 import { toast } from "sonner";
 import { api, ApiError, type AddressSuggestion, type Order, type Quote } from "@/lib/api";
 import { money, when } from "@/lib/format";
@@ -8,13 +9,7 @@ import { LocationMap } from "@/components/LocationMap";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -32,6 +27,7 @@ const NOTES_PLACEHOLDER =
   "suggestions, pick the closest one and describe the real location here.";
 
 export default function CustomerDashboard() {
+  const openOrder = useOpenOrderOnClick();
   const [categories, setCategories] = useState<string[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [tab, setTab] = useState("place");
@@ -58,7 +54,10 @@ export default function CustomerDashboard() {
   };
 
   useEffect(() => {
-    api.categories().then((r) => setCategories(r.categories)).catch(() => {});
+    api
+      .categories()
+      .then((r) => setCategories(r.categories))
+      .catch(() => {});
     loadOrders();
     const t = setInterval(loadOrders, 15000);
     return () => clearInterval(t);
@@ -221,7 +220,8 @@ export default function CustomerDashboard() {
 
               {(!pickupPoint || !dropoffPoint) && (
                 <p className="text-xs text-muted-foreground">
-                  Select an address from the suggestions for both fields to calculate a price and route.
+                  Select an address from the suggestions for both fields to calculate a price and
+                  route.
                 </p>
               )}
 
@@ -256,7 +256,9 @@ export default function CustomerDashboard() {
                       {money(quote.price, quote.currency)}
                     </span>
                     <span className="mx-2 text-muted-foreground">·</span>
-                    <span className="text-muted-foreground">~{Math.round(quote.durationMin)} min drive</span>
+                    <span className="text-muted-foreground">
+                      ~{Math.round(quote.durationMin)} min drive
+                    </span>
                   </div>
                 )}
               </div>
@@ -275,11 +277,15 @@ export default function CustomerDashboard() {
           ) : (
             <div className="space-y-3">
               {orders.map((o) => (
-                <Card key={o.id}>
+                <Card
+                  key={o.id}
+                  className="cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/30"
+                  onClick={openOrder(o.id)}
+                >
                   <CardContent className="pt-6">
                     <div className="mb-2 flex items-start justify-between gap-2">
                       <div>
-                        <p className="font-semibold">{o.itemCategory}</p>
+                        <OrderTitleLink id={o.id}>{o.itemCategory}</OrderTitleLink>
                         <p className="text-sm text-muted-foreground">{when(o.createdAt)}</p>
                       </div>
                       <OrderStatusBadge status={o.status} />

@@ -41,6 +41,17 @@ const ROLE_COPY: Record<Role, { lead: string; accent: string; body: string; poin
   },
 };
 
+// What to tell the person when sign-in fails. Wrong email/password (401)
+// always reads the same, whichever login door (customer/courier/admin) was used.
+export function loginErrorMessage(e: unknown): string {
+  if (e instanceof ApiError) {
+    if (e.status === 401) return "Incorrect email or password. Please try again.";
+    if (e.status === 403) return "This account has been suspended. Contact info@carefulto.ca.";
+    return e.message;
+  }
+  return "Sign in failed. Check your connection and try again.";
+}
+
 function asRole(v: string | null): Role {
   return v === "courier" || v === "admin" ? v : "customer";
 }
@@ -60,10 +71,19 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const fail = (message: string) => {
+    setErr(message);
+    toast.error(message);
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setBusy(true);
     setErr(null);
+    if (!email.trim() || !password) {
+      fail("Enter your email address and password.");
+      return;
+    }
+    setBusy(true);
     try {
       // The account's own role decides the dashboard, whichever door was used.
       const user = await login(email, password);
@@ -74,9 +94,7 @@ export default function LoginPage() {
       );
       navigate("/app", { replace: true });
     } catch (e) {
-      setErr(
-        e instanceof ApiError ? e.message : "Sign in failed. Check your connection and try again.",
-      );
+      fail(loginErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -120,7 +138,10 @@ export default function LoginPage() {
         ))}
       </nav>
 
-      <form onSubmit={submit} className="auth-form" noValidate={false}>
+      {/* noValidate: the browser's own "include an @" bubble blocked the
+          request (so "admin" never reached the server) and looked like a
+          password-manager popup. Every attempt now gets the app's error. */}
+      <form onSubmit={submit} className="auth-form" noValidate>
         {err && (
           <p className="auth-error" role="alert">
             {err}

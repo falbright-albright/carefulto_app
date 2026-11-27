@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { OrderTitleLink, useOpenOrderOnClick } from "@/components/OrderLink";
 import { toast } from "sonner";
 import { api, ApiError, type Order } from "@/lib/api";
 import { money, when } from "@/lib/format";
@@ -8,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Check, X, PackageCheck } from "lucide-react";
 
 export default function CourierDashboard() {
+  const openOrder = useOpenOrderOnClick();
   const [orders, setOrders] = useState<Order[]>([]);
 
   const load = async () => {
@@ -40,11 +42,14 @@ export default function CourierDashboard() {
   const done = orders.filter((o) => ["completed", "verified"].includes(o.status));
 
   const OrderCard = ({ o, children }: { o: Order; children?: React.ReactNode }) => (
-    <Card>
+    <Card
+      className="cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/30"
+      onClick={openOrder(o.id)}
+    >
       <CardContent className="pt-6">
         <div className="mb-2 flex items-start justify-between gap-2">
           <div>
-            <p className="font-semibold">{o.itemCategory}</p>
+            <OrderTitleLink id={o.id}>{o.itemCategory}</OrderTitleLink>
             <p className="text-sm text-muted-foreground">
               For {o.customerName} · {when(o.createdAt)}
             </p>
@@ -142,7 +147,9 @@ export default function CourierDashboard() {
             {done.map((o) => (
               <OrderCard key={o.id} o={o}>
                 {o.status === "completed" && (
-                  <p className="text-sm text-muted-foreground">Waiting for customer verification…</p>
+                  <p className="text-sm text-muted-foreground">
+                    Waiting for customer verification…
+                  </p>
                 )}
               </OrderCard>
             ))}

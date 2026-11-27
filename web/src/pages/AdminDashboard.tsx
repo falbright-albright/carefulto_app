@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { OrderTitleLink, useOpenOrderOnClick } from "@/components/OrderLink";
 import { toast } from "sonner";
 import { api, ApiError, type AdminUser, type Order } from "@/lib/api";
 import { money, when } from "@/lib/format";
@@ -75,7 +76,9 @@ function CreateUserDialog({ onDone }: { onDone: () => void }) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create courier or admin</DialogTitle>
-          <DialogDescription>Customers sign up themselves; you create staff here.</DialogDescription>
+          <DialogDescription>
+            Customers sign up themselves; you create staff here.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
@@ -96,7 +99,12 @@ function CreateUserDialog({ onDone }: { onDone: () => void }) {
           </div>
           <div className="space-y-2">
             <Label htmlFor="cu-email">Email</Label>
-            <Input id="cu-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Input
+              id="cu-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="cu-pw">Temporary password</Label>
@@ -120,17 +128,14 @@ function CreateUserDialog({ onDone }: { onDone: () => void }) {
 }
 
 export default function AdminDashboard() {
+  const openOrder = useOpenOrderOnClick();
   const [orders, setOrders] = useState<Order[]>([]);
   const [couriers, setCouriers] = useState<Courier[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
 
   const load = async () => {
     try {
-      const [o, c, u] = await Promise.all([
-        api.listOrders(),
-        api.listCouriers(),
-        api.listUsers(),
-      ]);
+      const [o, c, u] = await Promise.all([api.listOrders(), api.listCouriers(), api.listUsers()]);
       setOrders(o.orders);
       setCouriers(c.couriers);
       setUsers(u.users);
@@ -204,12 +209,14 @@ export default function AdminDashboard() {
                 </TableHeader>
                 <TableBody>
                   {orders.map((o) => (
-                    <TableRow key={o.id}>
+                    <TableRow key={o.id} className="cursor-pointer" onClick={openOrder(o.id)}>
                       <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                         {when(o.createdAt)}
                       </TableCell>
                       <TableCell>{o.customerName}</TableCell>
-                      <TableCell>{o.itemCategory}</TableCell>
+                      <TableCell>
+                        <OrderTitleLink id={o.id}>{o.itemCategory}</OrderTitleLink>
+                      </TableCell>
                       <TableCell className="max-w-[220px] text-xs">
                         <div className="truncate">{o.pickupAddress}</div>
                         <div className="truncate text-muted-foreground">→ {o.dropoffAddress}</div>
@@ -227,7 +234,9 @@ export default function AdminDashboard() {
                         <OrderStatusBadge status={o.status} />
                       </TableCell>
                       <TableCell className="text-sm">{o.courierName ?? "—"}</TableCell>
-                      <TableCell className="whitespace-nowrap text-sm">{verificationCell(o)}</TableCell>
+                      <TableCell className="whitespace-nowrap text-sm">
+                        {verificationCell(o)}
+                      </TableCell>
                       <TableCell className="text-right">
                         {(o.status === "placed" || o.status === "rejected") && (
                           <RecommendDialog order={o} couriers={couriers} onDone={load} />
@@ -275,7 +284,9 @@ export default function AdminDashboard() {
                         <Badge variant="success">Active</Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{when(u.created_at)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {when(u.created_at)}
+                    </TableCell>
                     <TableCell className="text-right">
                       {u.role !== "admin" && (
                         <Button
