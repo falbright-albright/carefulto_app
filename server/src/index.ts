@@ -50,6 +50,7 @@ const routes: Route[] = [
   // --- courier actions ---
   { method: "POST", pattern: "/api/orders/:id/accept", access: ["courier"], handler: courierR.accept },
   { method: "POST", pattern: "/api/orders/:id/reject", access: ["courier"], handler: courierR.reject },
+  { method: "GET", pattern: "/api/courier/account", access: ["courier"], handler: courierR.myAccount },
 
   // --- admin ---
   { method: "POST", pattern: "/api/orders/:id/recommend", access: ["admin"], handler: adminR.recommend },

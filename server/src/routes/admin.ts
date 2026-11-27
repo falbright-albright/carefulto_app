@@ -3,6 +3,7 @@ import { json, error, readJson, reqStr } from "../http.ts";
 import { hashPassword, type User } from "../auth.ts";
 import {
   changedMeanwhile,
+  courierRating,
   getOrder,
   listOrdersForCourier,
   listOrdersForCustomer,
@@ -189,7 +190,7 @@ const DELIVERED = sql`o.status IN ('completed', 'verified') AND o.courier_verifi
 // GET /api/admin/users/:id  — one account with role-specific stats (admin).
 //   customer: orders placed, by outcome, total spent, recent orders
 //   courier:  deliveries, in progress, rejected, cancelled while assigned,
-//             earnings this month and all time, recent orders
+//             earnings this month and all time, average rating, recent orders
 // "Earnings" is the price of the orders a courier delivered: the courier
 // dashboard already shows price as the payout. A real payout split belongs
 // to the business-logic PR.
@@ -202,8 +203,6 @@ export async function getUser(_req: Request, p: Record<string, string>): Promise
     | { id: string; email: string; name: string; role: string; banned_at: string | null; created_at: string }
     | undefined;
   if (!user) return error("user not found", 404);
-
-  const tz = config.analyticsTimeZone;
 
   if (user.role === "customer") {
     const [st] = await sql`
@@ -231,49 +230,58 @@ export async function getUser(_req: Request, p: Record<string, string>): Promise
     });
   }
 
-  if (user.role === "courier") {
-    const [st] = await sql`
-      SELECT
-        count(*) FILTER (WHERE ${DELIVERED})::int AS delivered,
-        count(*) FILTER (WHERE o.status = 'accepted')::int AS in_progress,
-        count(*) FILTER (WHERE o.status = 'recommended')::int AS awaiting_reply,
-        count(*) FILTER (WHERE o.status = 'cancelled')::int AS cancelled_while_assigned,
-        COALESCE(sum(o.price) FILTER (WHERE ${DELIVERED}), 0)::float AS earnings_all_time,
-        COALESCE(sum(o.price) FILTER (
-          WHERE ${DELIVERED}
-            AND to_char(o.courier_verified_at AT TIME ZONE ${tz}, 'YYYY-MM')
-              = to_char(now() AT TIME ZONE ${tz}, 'YYYY-MM')
-        ), 0)::float AS earnings_this_month,
-        count(*) FILTER (
-          WHERE ${DELIVERED}
-            AND to_char(o.courier_verified_at AT TIME ZONE ${tz}, 'YYYY-MM')
-              = to_char(now() AT TIME ZONE ${tz}, 'YYYY-MM')
-        )::int AS delivered_this_month
-      FROM orders o WHERE o.courier_id = ${user.id}
-    `;
-    // A reject clears the order's courier, so rejections are counted from
-    // the order history (one event per admin notified -> distinct orders).
-    const [rej] = await sql`
-      SELECT count(DISTINCT order_id)::int AS n
-      FROM order_events WHERE type = 'order_rejected' AND actor_id = ${user.id}
-    `;
-    const recent = (await listOrdersForCourier(user.id)).slice(0, RECENT);
-    return json({
-      user,
-      courier: {
-        delivered: st!.delivered,
-        deliveredThisMonth: st!.delivered_this_month,
-        inProgress: st!.in_progress,
-        awaitingReply: st!.awaiting_reply,
-        rejected: rej!.n,
-        cancelledWhileAssigned: st!.cancelled_while_assigned,
-        earningsThisMonth: st!.earnings_this_month,
-        earningsAllTime: st!.earnings_all_time,
-        currency: config.pricing.currency,
-      },
-      recentOrders: recent,
-    });
-  }
+  if (user.role === "courier") return json({ user, ...(await courierAccount(user.id)) });
 
   return json({ user, recentOrders: [] });
+}
+
+// A courier's delivery stats, average rating and recent orders. Shared by the
+// admin account page and the courier's own My account page.
+export async function courierAccount(courierId: string) {
+  const tz = config.analyticsTimeZone;
+  const [st] = await sql`
+    SELECT
+      count(*) FILTER (WHERE ${DELIVERED})::int AS delivered,
+      count(*) FILTER (WHERE o.status = 'accepted')::int AS in_progress,
+      count(*) FILTER (WHERE o.status = 'recommended')::int AS awaiting_reply,
+      count(*) FILTER (WHERE o.status = 'cancelled')::int AS cancelled_while_assigned,
+      COALESCE(sum(o.price) FILTER (WHERE ${DELIVERED}), 0)::float AS earnings_all_time,
+      COALESCE(sum(o.price) FILTER (
+        WHERE ${DELIVERED}
+          AND to_char(o.courier_verified_at AT TIME ZONE ${tz}, 'YYYY-MM')
+            = to_char(now() AT TIME ZONE ${tz}, 'YYYY-MM')
+      ), 0)::float AS earnings_this_month,
+      count(*) FILTER (
+        WHERE ${DELIVERED}
+          AND to_char(o.courier_verified_at AT TIME ZONE ${tz}, 'YYYY-MM')
+            = to_char(now() AT TIME ZONE ${tz}, 'YYYY-MM')
+      )::int AS delivered_this_month
+    FROM orders o WHERE o.courier_id = ${courierId}
+  `;
+  // A reject clears the order's courier, so rejections are counted from
+  // the order history (one event per admin notified -> distinct orders).
+  const [rej] = await sql`
+    SELECT count(DISTINCT order_id)::int AS n
+    FROM order_events WHERE type = 'order_rejected' AND actor_id = ${courierId}
+  `;
+  const [rating, orders] = await Promise.all([
+    courierRating(courierId),
+    listOrdersForCourier(courierId),
+  ]);
+  return {
+    courier: {
+      delivered: st!.delivered,
+      deliveredThisMonth: st!.delivered_this_month,
+      inProgress: st!.in_progress,
+      awaitingReply: st!.awaiting_reply,
+      rejected: rej!.n,
+      cancelledWhileAssigned: st!.cancelled_while_assigned,
+      earningsThisMonth: st!.earnings_this_month,
+      earningsAllTime: st!.earnings_all_time,
+      averageRating: rating.average,
+      ratedDeliveries: rating.count,
+      currency: config.pricing.currency,
+    },
+    recentOrders: orders.slice(0, RECENT),
+  };
 }

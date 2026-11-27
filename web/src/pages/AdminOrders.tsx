@@ -6,6 +6,7 @@ import { OrderTitleLink, orderPath, useOpenOrderOnClick } from "@/components/Ord
 import { OrderStatusBadge } from "@/components/OrderStatusBadge";
 import { OrderAdminMenu } from "@/components/OrderAdminMenu";
 import { RecommendDialog, type Courier } from "@/components/RecommendDialog";
+import { Stars } from "@/components/StarRating";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +23,25 @@ import {
 const SEARCH_DEBOUNCE_MS = 300;
 
 function verificationCell(o: Order) {
-  if (o.status === "verified") return <span className="text-emerald-600">Both ✓</span>;
+  if (o.status === "verified") {
+    return (
+      <div>
+        <span className="text-emerald-600">Both ✓</span>
+        <div className="mt-0.5" title={o.ratingComment ?? undefined}>
+          {o.rating ? (
+            <Stars value={o.rating} />
+          ) : (
+            <span className="text-xs text-muted-foreground">Not rated</span>
+          )}
+          {o.ratingComment && (
+            <div className="max-w-[160px] truncate whitespace-nowrap text-xs text-muted-foreground">
+              “{o.ratingComment}”
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
   if (o.status === "completed") {
     return (
       <span className="text-xs text-muted-foreground">

@@ -6,6 +6,8 @@ import { money, orderNo, when } from "@/lib/format";
 import { OrderStatusBadge } from "@/components/OrderStatusBadge";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { LocationMap } from "@/components/LocationMap";
+import { Stars } from "@/components/StarRating";
+import { VerifyDeliveryDialog } from "@/components/VerifyDeliveryDialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -112,16 +114,6 @@ export default function CustomerDashboard() {
       toast.error(err instanceof ApiError ? err.message : "Could not place order");
     } finally {
       setPlacing(false);
-    }
-  };
-
-  const verify = async (id: string) => {
-    try {
-      await api.verifyOrder(id);
-      toast.success("Delivery verified. Thank you!");
-      loadOrders();
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Could not verify");
     }
   };
 
@@ -320,13 +312,18 @@ export default function CustomerDashboard() {
                       )}
                     </div>
                     {o.status === "completed" && (
-                      <Button className="mt-4" size="sm" onClick={() => verify(o.id)}>
-                        Verify delivery completed
-                      </Button>
+                      <div className="mt-4">
+                        <VerifyDeliveryDialog order={o} onDone={loadOrders} />
+                      </div>
                     )}
                     {o.status === "verified" && (
-                      <p className="mt-3 text-sm font-medium text-emerald-600">
+                      <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-medium text-emerald-600">
                         ✓ Delivery confirmed complete.
+                        {o.rating && (
+                          <span className="inline-flex items-center gap-1 font-normal text-muted-foreground">
+                            You rated it <Stars value={o.rating} />
+                          </span>
+                        )}
                       </p>
                     )}
                   </CardContent>

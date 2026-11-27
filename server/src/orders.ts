@@ -28,6 +28,10 @@ export interface OrderView {
   courierName: string | null;
   customerVerifiedAt: string | null;
   courierVerifiedAt: string | null;
+  // Customer's 1–5 star rating from verification (null = not rated) and
+  // optional comment. The comment is withheld from couriers (withoutComment).
+  rating: number | null;
+  ratingComment: string | null;
   createdAt: string;
   updatedAt: string;
   cancelledAt: string | null;
@@ -44,6 +48,7 @@ const SELECT = sql`
          o.customer_id, cu.name AS customer_name,
          o.courier_id, co.name AS courier_name,
          o.customer_verified_at, o.courier_verified_at,
+         o.rating, o.rating_comment,
          o.created_at, o.updated_at,
          o.cancelled_at, ca.name AS cancelled_by_name, o.cancel_reason, o.refund_status
   FROM orders o
@@ -77,6 +82,8 @@ function toView(r: any): OrderView {
     courierName: r.courier_name,
     customerVerifiedAt: r.customer_verified_at,
     courierVerifiedAt: r.courier_verified_at,
+    rating: r.rating === null ? null : Number(r.rating),
+    ratingComment: r.rating_comment,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     cancelledAt: r.cancelled_at,
@@ -104,6 +111,25 @@ export async function listOrdersForCustomer(customerId: string): Promise<OrderVi
 export async function listOrdersForCourier(courierId: string): Promise<OrderView[]> {
   const rows = await sql`${SELECT} WHERE o.courier_id = ${courierId} ORDER BY o.created_at DESC`;
   return rows.map(toView);
+}
+
+// Couriers see their stars but not the customer's written comment, so
+// customers can be candid with CarefulTO.
+export function withoutComment(o: OrderView): OrderView {
+  return { ...o, ratingComment: null };
+}
+
+export interface CourierRating {
+  average: number | null; // mean stars over rated deliveries, 1 decimal
+  count: number; // rated deliveries
+}
+
+export async function courierRating(courierId: string): Promise<CourierRating> {
+  const [r] = await sql<{ average: number | null; count: number }[]>`
+    SELECT round(avg(rating)::numeric, 1)::float AS average, count(rating)::int AS count
+    FROM orders WHERE courier_id = ${courierId} AND rating IS NOT NULL
+  `;
+  return { average: r?.average ?? null, count: r?.count ?? 0 };
 }
 
 // 409 for an order action whose guarded UPDATE matched nothing: someone else
