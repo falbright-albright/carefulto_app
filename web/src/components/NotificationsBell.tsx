@@ -64,30 +64,42 @@ export function NotificationsBell({ pulse }: { pulse?: number }) {
           <p className="py-8 text-center text-sm text-muted-foreground">No notifications yet.</p>
         ) : (
           <ul className="divide-y">
-            {items.map((n) => (
-              <li key={n.id}>
-                {n.order_id ? (
-                  // Every order notification is a shortcut to that order's page.
-                  <Link
-                    to={`/orders/${n.order_id}`}
-                    onClick={() => setOpen(false)}
-                    className="-mx-2 flex items-center gap-3 rounded-md px-2 py-3 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
-                  >
-                    <NotificationText n={n} />
-                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                  </Link>
-                ) : (
-                  <div className="py-3">
-                    <NotificationText n={n} />
-                  </div>
-                )}
-              </li>
-            ))}
+            {items.map((n) => {
+              const href = notificationHref(n);
+              return (
+                <li key={n.id}>
+                  {href ? (
+                    // Every order or support notification is a shortcut to its page.
+                    <Link
+                      to={href}
+                      onClick={() => setOpen(false)}
+                      className="-mx-2 flex items-center gap-3 rounded-md px-2 py-3 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                    >
+                      <NotificationText n={n} />
+                      <ChevronRight
+                        className="h-4 w-4 shrink-0 text-muted-foreground"
+                        aria-hidden
+                      />
+                    </Link>
+                  ) : (
+                    <div className="py-3">
+                      <NotificationText n={n} />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </DialogContent>
     </Dialog>
   );
+}
+
+export function notificationHref(n: Notification): string | null {
+  if (n.support_request_id) return `/requests/${n.support_request_id}`;
+  if (n.order_id) return `/orders/${n.order_id}`;
+  return null;
 }
 
 function NotificationText({ n }: { n: Notification }) {

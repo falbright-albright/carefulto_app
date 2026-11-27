@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Ban, Check, PackageCheck, X } from "lucide-react";
+import { ArrowLeft, Ban, Check, Flag, PackageCheck, X } from "lucide-react";
 import { DirectionsButton } from "@/components/DirectionsButton";
 import { api, ApiError, type Order } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -292,8 +292,23 @@ function OrderActions({
     );
   }
 
-  if (!content) return null;
-  return <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-4">{content}</div>;
+  // Customers can raise a complaint about any of their orders.
+  const report =
+    role === "customer" && o.customerId === userId ? (
+      <Button asChild size="sm" variant="outline" className="ml-auto">
+        <Link to={`/app?tab=contact&order=${o.id}`}>
+          <Flag className="h-4 w-4" /> Report a problem
+        </Link>
+      </Button>
+    ) : null;
+
+  if (!content && !report) return null;
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-4">
+      {content}
+      {report}
+    </div>
+  );
 }
 
 function AdminCancelButton({ order, onDone }: { order: Order; onDone: () => void }) {

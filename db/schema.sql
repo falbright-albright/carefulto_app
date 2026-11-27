@@ -161,3 +161,51 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancelled_at  TIMESTAMPTZ;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancelled_by  UUID REFERENCES users(id);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancel_reason TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS refund_status TEXT;
+
+-- ---------------------------------------------------------------------------
+-- Customer support requests ("Contact us"). A request is a conversation
+-- between one customer and the admins:
+--   kind     delivery | courier | question | comment
+--   status   open       -> waiting on an admin (new, or the customer replied)
+--            in_review  -> an admin has picked it up / replied
+--            resolved   -> closed by an admin; a customer reply reopens it
+-- Delivery and courier complaints are tied to one of the customer's orders.
+-- `courier_id` is a snapshot of that order's courier when the request was
+-- made, so a courier complaint stays filed against the right person even if
+-- the order is later reassigned. Couriers never see requests.
+-- ---------------------------------------------------------------------------
+CREATE SEQUENCE IF NOT EXISTS support_ref_seq START 1001;
+
+CREATE TABLE IF NOT EXISTS support_requests (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  ref_number   INTEGER NOT NULL UNIQUE DEFAULT nextval('support_ref_seq'),
+  customer_id  UUID NOT NULL REFERENCES users(id),
+  kind         TEXT NOT NULL CHECK (kind IN ('delivery', 'courier', 'question', 'comment')),
+  order_id     UUID REFERENCES orders(id),
+  courier_id   UUID REFERENCES users(id),
+  subject      TEXT NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_review', 'resolved')),
+  resolved_at  TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (kind NOT IN ('delivery', 'courier') OR order_id IS NOT NULL),
+  CHECK (kind <> 'courier' OR courier_id IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_support_customer ON support_requests(customer_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_support_status   ON support_requests(status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_support_courier  ON support_requests(courier_id);
+CREATE INDEX IF NOT EXISTS idx_support_order    ON support_requests(order_id);
+
+CREATE TABLE IF NOT EXISTS support_messages (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id  UUID NOT NULL REFERENCES support_requests(id) ON DELETE CASCADE,
+  author_id   UUID NOT NULL REFERENCES users(id),
+  body        TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_support_messages_request ON support_messages(request_id, created_at);
+
+-- Notifications can now point at a support request instead of an order.
+ALTER TABLE order_events ALTER COLUMN order_id DROP NOT NULL;
+ALTER TABLE order_events ADD COLUMN IF NOT EXISTS support_request_id UUID
+  REFERENCES support_requests(id) ON DELETE CASCADE;

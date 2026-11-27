@@ -1,4 +1,4 @@
-import type { OrderStatus } from "./api";
+import type { OrderStatus, SupportKind, SupportStatus } from "./api";
 
 // 1001 -> "CT-1001": the reference customers and admins quote.
 export function orderNo(n: number): string {
@@ -91,3 +91,27 @@ export function minutes(m: number): string {
   const rest = r % 60;
   return rest === 0 ? `${h} h` : `${h} h ${rest} min`;
 }
+
+// --- support requests ("Contact us") ---
+
+export const SUPPORT_KIND_LABEL: Record<SupportKind, string> = {
+  delivery: "Problem with a delivery",
+  courier: "Problem with a courier",
+  question: "Question",
+  comment: "Comment",
+};
+
+export const SUPPORT_STATUS_LABEL: Record<SupportStatus, string> = {
+  open: "Open",
+  in_review: "In review",
+  resolved: "Resolved",
+};
+
+export const SUPPORT_STATUS_VARIANT: Record<SupportStatus, BadgeVariant> = {
+  open: "warning",
+  in_review: "secondary",
+  resolved: "success",
+};
+
+// What we promise on submit, and repeat on the Contact us tab.
+export const SUPPORT_REPLY_PROMISE = "We'll reply within 24 hours.";

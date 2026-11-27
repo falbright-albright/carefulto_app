@@ -1,18 +1,21 @@
 import { sql } from "./db.ts";
 
-// Records an order event that also surfaces as an in-app notification for the
-// recipient. actorId/recipientId may be null (e.g. system or broadcast).
+// Records an event that also surfaces as an in-app notification for the
+// recipient. It belongs to an order or to a support request (supportRequestId);
+// actorId/recipientId may be null (e.g. system or broadcast).
 export async function notify(params: {
-  orderId: string;
+  orderId?: string | null;
+  supportRequestId?: string | null;
   type: string;
   message: string;
   actorId?: string | null;
   recipientId?: string | null;
 }): Promise<void> {
   await sql`
-    INSERT INTO order_events (order_id, actor_id, recipient_id, type, message)
+    INSERT INTO order_events (order_id, support_request_id, actor_id, recipient_id, type, message)
     VALUES (
-      ${params.orderId},
+      ${params.orderId ?? null},
+      ${params.supportRequestId ?? null},
       ${params.actorId ?? null},
       ${params.recipientId ?? null},
       ${params.type},
@@ -23,7 +26,8 @@ export async function notify(params: {
 
 // Notify every admin (used when an order is fully verified, or newly placed).
 export async function notifyAdmins(params: {
-  orderId: string;
+  orderId?: string | null;
+  supportRequestId?: string | null;
   type: string;
   message: string;
   actorId?: string | null;

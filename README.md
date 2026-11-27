@@ -108,6 +108,34 @@ platform additions. Terms and Privacy are kept verbatim as HTML in
 `web/src/site/content/` — edit the wording there. Brand images are in
 `web/public/brand/`.
 
+## Contact us (support requests)
+
+Customers have a third dashboard tab, **Contact us**, for complaints, questions
+and comments. They pick a topic first: a problem with a **delivery**, a problem
+with a **courier**, a **question**, or a **comment**. Delivery and courier
+complaints must name one of the customer's own orders, and a courier complaint
+is filed against the courier assigned to that order (saved on the request, so
+it stays with that courier even if the order is reassigned). Each order card
+and order page also has a **Report a problem** button that opens the form with
+the order filled in.
+
+Every request gets a reference (`RQ-1001`) and is a back-and-forth conversation
+at `/requests/:id`:
+
+- **Open**: waiting on an admin (new, or the customer replied).
+- **In review**: an admin replied or picked it up.
+- **Resolved**: closed by an admin. A customer reply reopens it.
+
+Admins work from the **Requests** tab (open requests first, filter by status and
+type) and change the status on the request page. Customers see admin replies
+signed "CarefulTO Support". Couriers never see requests. New requests and
+customer replies notify admins in-app; admin replies and resolving or reopening
+a request notify the customer. The confirmation promises a reply within 24 hours
+(`SUPPORT_REPLY_PROMISE` in `web/src/lib/format.ts`).
+
+API: `POST/GET /api/support/requests`, `GET /api/support/requests/:id`,
+`POST /api/support/requests/:id/messages`, `POST /api/support/requests/:id/status` (admin).
+
 ## Admin analytics
 
 The admin dashboard's **Analytics** tab reports on the business month by month
@@ -189,6 +217,7 @@ server/                  Bun API server + static SPA host
   src/pricing.ts         Pricing formula
   src/regions.ts         Pickup -> municipality (Nominatim) for analytics
   src/routes/analytics.ts  Admin analytics endpoints
+  src/support.ts         Support requests (Contact us): validation + queries
   scripts/seed-demo.ts   Synthetic data for a *demo* database
 web/                     React + shadcn frontend
   src/site/              Public CarefulTO website (home, support, terms, privacy, cancel, sign-in)

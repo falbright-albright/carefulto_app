@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api, ApiError, type AdminUser } from "@/lib/api";
 import { when } from "@/lib/format";
@@ -35,6 +35,7 @@ import {
 import { UserPlus } from "lucide-react";
 import AnalyticsPanel from "@/pages/AnalyticsPanel";
 import AdminOrders from "@/pages/AdminOrders";
+import AdminRequests from "@/pages/AdminRequests";
 import type { Courier } from "@/components/RecommendDialog";
 
 function CreateUserDialog({ onDone }: { onDone: () => void }) {
@@ -130,6 +131,11 @@ function CreateUserDialog({ onDone }: { onDone: () => void }) {
 export default function AdminDashboard() {
   const [couriers, setCouriers] = useState<Courier[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [activeRequests, setActiveRequests] = useState<number | null>(null);
+  // The open tab lives in the URL (?tab=requests) so "Back to requests" lands here.
+  const [params, setParams] = useSearchParams();
+  const tab = params.get("tab") ?? "orders";
+  const setTab = (t: string) => setParams(t === "orders" ? {} : { tab: t }, { replace: true });
 
   const load = async () => {
     try {
@@ -143,6 +149,10 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     load();
+    api
+      .supportRequests({ status: "active" })
+      .then((r) => setActiveRequests(r.active ?? null))
+      .catch(() => {});
     const t = setInterval(load, 15000);
     return () => clearInterval(t);
   }, []);
@@ -166,9 +176,12 @@ export default function AdminDashboard() {
     <div className="mx-auto max-w-7xl">
       <h1 className="mb-6 text-2xl font-bold">Admin dashboard</h1>
 
-      <Tabs defaultValue="orders">
-        <TabsList className="mb-4">
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList className="mb-4 h-auto flex-wrap justify-start">
           <TabsTrigger value="orders">Orders</TabsTrigger>
+          <TabsTrigger value="requests">
+            Requests{activeRequests ? ` (${activeRequests})` : ""}
+          </TabsTrigger>
           <TabsTrigger value="users">Users ({users.length})</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
@@ -180,6 +193,10 @@ export default function AdminDashboard() {
               No couriers exist yet — create one in the Users tab before recommending orders.
             </p>
           )}
+        </TabsContent>
+
+        <TabsContent value="requests">
+          <AdminRequests onActiveCount={setActiveRequests} />
         </TabsContent>
 
         <TabsContent value="users">

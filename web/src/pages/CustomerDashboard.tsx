@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { OrderTitleLink, useOpenOrderOnClick } from "@/components/OrderLink";
 import { toast } from "sonner";
 import { api, ApiError, type AddressSuggestion, type Order, type Quote } from "@/lib/api";
@@ -18,7 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MapPin, Truck } from "lucide-react";
+import { Flag, MapPin, Truck } from "lucide-react";
+import { ContactUsPanel, type ContactPreset } from "@/components/ContactUsPanel";
 
 // Shown as the grey placeholder in the delivery-notes field.
 const NOTES_PLACEHOLDER =
@@ -30,7 +32,17 @@ export default function CustomerDashboard() {
   const openOrder = useOpenOrderOnClick();
   const [categories, setCategories] = useState<string[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [tab, setTab] = useState("place");
+  // The open tab lives in the URL: ?tab=orders | contact. "Report a problem"
+  // links here as ?tab=contact&order=<id> to pre-fill the Contact us form.
+  const [params, setParams] = useSearchParams();
+  const tab = params.get("tab") ?? "place";
+  const setTab = (t: string) => setParams(t === "place" ? {} : { tab: t }, { replace: true });
+  const presetOrder = params.get("order");
+  const preset: ContactPreset | undefined = presetOrder
+    ? { kind: "delivery", orderId: presetOrder }
+    : undefined;
+  const reportProblem = (orderId: string) =>
+    setParams({ tab: "contact", order: orderId }, { replace: true });
 
   // order form state
   const [category, setCategory] = useState("");
@@ -131,9 +143,17 @@ export default function CustomerDashboard() {
       <p className="mb-6 text-muted-foreground">Place a new order or track existing ones.</p>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="mb-4">
-          <TabsTrigger value="place">Place an order</TabsTrigger>
-          <TabsTrigger value="orders">My orders ({orders.length})</TabsTrigger>
+        {/* Three tabs share a phone's width evenly; desktop sizes them to fit. */}
+        <TabsList className="mb-4 grid h-auto w-full grid-cols-3 sm:inline-flex sm:w-auto">
+          <TabsTrigger value="place" className="whitespace-normal px-2 sm:px-3">
+            Place an order
+          </TabsTrigger>
+          <TabsTrigger value="orders" className="whitespace-normal px-2 sm:px-3">
+            My orders ({orders.length})
+          </TabsTrigger>
+          <TabsTrigger value="contact" className="whitespace-normal px-2 sm:px-3">
+            Contact us
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="place">
@@ -319,21 +339,35 @@ export default function CustomerDashboard() {
                         </p>
                       )}
                     </div>
-                    {o.status === "completed" && (
-                      <Button className="mt-4" size="sm" onClick={() => verify(o.id)}>
-                        Verify delivery completed
+                    <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+                      {o.status === "completed" && (
+                        <Button size="sm" onClick={() => verify(o.id)}>
+                          Verify delivery completed
+                        </Button>
+                      )}
+                      {o.status === "verified" && (
+                        <p className="text-sm font-medium text-emerald-600">
+                          ✓ Delivery confirmed complete.
+                        </p>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="ml-auto"
+                        onClick={() => reportProblem(o.id)}
+                      >
+                        <Flag className="h-4 w-4" /> Report a problem
                       </Button>
-                    )}
-                    {o.status === "verified" && (
-                      <p className="mt-3 text-sm font-medium text-emerald-600">
-                        ✓ Delivery confirmed complete.
-                      </p>
-                    )}
+                    </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
           )}
+        </TabsContent>
+        <TabsContent value="contact">
+          {/* Remount when a different order is reported so the form re-fills. */}
+          <ContactUsPanel key={presetOrder ?? "blank"} orders={orders} preset={preset} />
         </TabsContent>
       </Tabs>
     </div>
