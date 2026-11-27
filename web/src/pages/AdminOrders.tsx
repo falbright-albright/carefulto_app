@@ -210,7 +210,9 @@ export default function AdminOrders({ couriers }: { couriers: Courier[] }) {
                 <TableHead>Status</TableHead>
                 <TableHead>Courier</TableHead>
                 <TableHead>Verified</TableHead>
-                <TableHead className="text-right">
+                {/* Pinned to the right edge so Recommend and the ⋮ menu stay
+                    reachable when the table is wider than the window. */}
+                <TableHead className="sticky right-0 bg-background shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.15)] text-right">
                   <span className="sr-only">Actions</span>
                 </TableHead>
               </TableRow>
@@ -260,7 +262,7 @@ export default function AdminOrders({ couriers }: { couriers: Courier[] }) {
                   </TableCell>
                   <TableCell className="text-sm">{o.courierName ?? "—"}</TableCell>
                   <TableCell className="whitespace-nowrap text-sm">{verificationCell(o)}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="sticky right-0 bg-background shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.15)] text-right">
                     <div className="flex items-center justify-end gap-1">
                       {(o.status === "placed" || o.status === "rejected") && (
                         <RecommendDialog order={o} couriers={couriers} onDone={reload} />

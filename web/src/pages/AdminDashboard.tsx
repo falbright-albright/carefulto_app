@@ -163,7 +163,7 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto max-w-7xl">
       <h1 className="mb-6 text-2xl font-bold">Admin dashboard</h1>
 
       <Tabs defaultValue="orders">

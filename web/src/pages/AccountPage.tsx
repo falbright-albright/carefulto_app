@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { api, ApiError, type AccountDetails } from "@/lib/api";
 import { money, orderNo, when } from "@/lib/format";
 import { orderPath } from "@/components/OrderLink";
 import { OrderStatusBadge } from "@/components/OrderStatusBadge";
+import { OrderAdminMenu } from "@/components/OrderAdminMenu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,8 +21,8 @@ export default function AccountPage() {
   const { id = "" } = useParams();
   const [state, setState] = useState<State>({ kind: "loading" });
 
-  useEffect(() => {
-    setState({ kind: "loading" });
+  // Initial load shows "Loading…"; a refresh after a cancel keeps the page.
+  const load = useCallback(() => {
     api
       .getAccount(id)
       .then((data) => setState({ kind: "ok", data }))
@@ -37,6 +38,11 @@ export default function AccountPage() {
         }),
       );
   }, [id]);
+
+  useEffect(() => {
+    setState({ kind: "loading" });
+    load();
+  }, [load]);
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -56,7 +62,7 @@ export default function AccountPage() {
           </CardContent>
         </Card>
       )}
-      {state.kind === "ok" && <Account data={state.data} />}
+      {state.kind === "ok" && <Account data={state.data} onChanged={load} />}
     </div>
   );
 }
@@ -71,7 +77,7 @@ function Stat({ label, value, hint }: { label: string; value: React.ReactNode; h
   );
 }
 
-function Account({ data }: { data: AccountDetails }) {
+function Account({ data, onChanged }: { data: AccountDetails; onChanged: () => void }) {
   const { user, customer, courier, recentOrders } = data;
   return (
     <div className="space-y-6">
@@ -160,10 +166,10 @@ function Account({ data }: { data: AccountDetails }) {
             ) : (
               <ul className="divide-y">
                 {recentOrders.map((o) => (
-                  <li key={o.id}>
+                  <li key={o.id} className="-mx-2 flex items-center gap-2">
                     <Link
                       to={orderPath(o.id)}
-                      className="-mx-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md px-2 py-3 text-sm hover:bg-accent"
+                      className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1 rounded-md px-2 py-3 text-sm hover:bg-accent"
                     >
                       <span className="font-mono font-semibold text-primary">
                         {orderNo(o.orderNumber)}
@@ -175,6 +181,7 @@ function Account({ data }: { data: AccountDetails }) {
                       <span>{money(o.price, o.currency)}</span>
                       <OrderStatusBadge status={o.status} />
                     </Link>
+                    <OrderAdminMenu order={o} onChanged={onChanged} />
                   </li>
                 ))}
               </ul>
