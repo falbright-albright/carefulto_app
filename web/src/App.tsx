@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { Badge } from "@/components/ui/badge";
-import { LogOut } from "lucide-react";
+import { LogOut, UserRound } from "lucide-react";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
 import CustomerDashboard from "@/pages/CustomerDashboard";
@@ -15,6 +15,7 @@ import CancelPage from "@/site/CancelPage";
 import LegalPage, { NotFoundPage } from "@/site/LegalPage";
 import OrderPage from "@/pages/OrderPage";
 import AccountPage from "@/pages/AccountPage";
+import MyAccountPage from "@/pages/MyAccountPage";
 
 function Header() {
   const { user, logout } = useAuth();
@@ -39,6 +40,21 @@ function Header() {
         <div className="flex shrink-0 items-center gap-1 sm:gap-3">
           <span className="hidden text-sm text-muted-foreground sm:inline">{user.name}</span>
           <NotificationsBell />
+          {user.role === "courier" && (
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              aria-label="My account"
+              title="My account"
+              className="px-2.5 sm:px-3"
+            >
+              <Link to="/account">
+                <UserRound className="h-4 w-4" />
+                <span className="hidden sm:inline">My account</span>
+              </Link>
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -129,6 +145,14 @@ export default function App() {
         element={
           <SignedIn loading={loading} user={user}>
             <AccountPage />
+          </SignedIn>
+        }
+      />
+      <Route
+        path="/account"
+        element={
+          <SignedIn loading={loading} user={user}>
+            <MyAccountPage />
           </SignedIn>
         }
       />

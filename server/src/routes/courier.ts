@@ -1,7 +1,8 @@
 import { sql } from "../db.ts";
 import { json, error } from "../http.ts";
 import type { User } from "../auth.ts";
-import { changedMeanwhile, getOrder } from "../orders.ts";
+import { changedMeanwhile, getOrder, withoutComment } from "../orders.ts";
+import { courierAccount } from "./admin.ts";
 import { notify, notifyAdmins } from "../notifications.ts";
 
 // POST /api/orders/:id/accept  (courier)
@@ -61,4 +62,12 @@ export async function reject(_req: Request, p: Record<string, string>, user: Use
     actorId: user.id,
   });
   return json({ order: await getOrder(order.id) });
+}
+
+// GET /api/courier/account  (courier) — the courier's own stats and average
+// rating for their My account page. Same numbers admins see, minus the
+// customers' written comments.
+export async function myAccount(_req: Request, _p: Record<string, string>, user: User): Promise<Response> {
+  const { courier, recentOrders } = await courierAccount(user.id);
+  return json({ courier, recentOrders: recentOrders.map(withoutComment) });
 }

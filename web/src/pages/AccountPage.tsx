@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
-import { api, ApiError, type AccountDetails } from "@/lib/api";
+import { api, ApiError, type AccountDetails, type CourierStats, type Order } from "@/lib/api";
 import { money, orderNo, when } from "@/lib/format";
 import { orderPath } from "@/components/OrderLink";
 import { OrderStatusBadge } from "@/components/OrderStatusBadge";
 import { OrderAdminMenu } from "@/components/OrderAdminMenu";
+import { Stars } from "@/components/StarRating";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -67,7 +68,7 @@ export default function AccountPage() {
   );
 }
 
-function Stat({ label, value, hint }: { label: string; value: React.ReactNode; hint?: string }) {
+export function Stat({ label, value, hint }: { label: string; value: React.ReactNode; hint?: string }) {
   return (
     <div className="rounded-lg border p-4">
       <p className="text-sm text-muted-foreground">{label}</p>
@@ -125,8 +126,46 @@ function Account({ data, onChanged }: { data: AccountDetails; onChanged: () => v
         </section>
       )}
 
-      {courier && (
+      {courier && <CourierStatsGrid courier={courier} />}
+
+      {(customer || courier) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Recent orders</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RecentOrders
+              orders={recentOrders}
+              menu={(o) => <OrderAdminMenu order={o} onChanged={onChanged} />}
+            />
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// The courier's average rating, as a stat value.
+export function RatingValue({ courier }: { courier: CourierStats }) {
+  if (courier.averageRating === null) return <span className="text-muted-foreground">No ratings</span>;
+  return (
+    <span className="flex items-center gap-2">
+      {courier.averageRating.toFixed(1)}
+      <Stars value={courier.averageRating} size="lg" showValue={false} />
+    </span>
+  );
+}
+
+// Courier stats, shown to admins on the account page and to the courier on
+// their own My account page.
+export function CourierStatsGrid({ courier }: { courier: CourierStats }) {
+  return (
         <section aria-label="Courier activity" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Stat
+            label="Average rating"
+            value={<RatingValue courier={courier} />}
+            hint={`From ${courier.ratedDeliveries} rated ${courier.ratedDeliveries === 1 ? "delivery" : "deliveries"}`}
+          />
           <Stat
             label="Deliveries made"
             value={courier.delivered}
@@ -153,42 +192,39 @@ function Account({ data, onChanged }: { data: AccountDetails; onChanged: () => v
             hint="Cancelled by an admin"
           />
         </section>
-      )}
+  );
+}
 
-      {(customer || courier) && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Recent orders</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {recentOrders.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No orders yet.</p>
-            ) : (
-              <ul className="divide-y">
-                {recentOrders.map((o) => (
-                  <li key={o.id} className="-mx-2 flex items-center gap-2">
-                    <Link
-                      to={orderPath(o.id)}
-                      className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1 rounded-md px-2 py-3 text-sm hover:bg-accent"
-                    >
-                      <span className="font-mono font-semibold text-primary">
-                        {orderNo(o.orderNumber)}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        {o.itemCategory}
-                        <span className="text-muted-foreground"> · {when(o.createdAt)}</span>
-                      </span>
-                      <span>{money(o.price, o.currency)}</span>
-                      <OrderStatusBadge status={o.status} />
-                    </Link>
-                    <OrderAdminMenu order={o} onChanged={onChanged} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      )}
-    </div>
+// A list of order rows linking to each order; verified orders show their
+// stars. `menu` adds a per-row action menu (admins).
+export function RecentOrders({
+  orders,
+  menu,
+}: {
+  orders: Order[];
+  menu?: (o: Order) => React.ReactNode;
+}) {
+  if (orders.length === 0) return <p className="text-sm text-muted-foreground">No orders yet.</p>;
+  return (
+    <ul className="divide-y">
+      {orders.map((o) => (
+        <li key={o.id} className="-mx-2 flex items-center gap-2">
+          <Link
+            to={orderPath(o.id)}
+            className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1 rounded-md px-2 py-3 text-sm hover:bg-accent"
+          >
+            <span className="font-mono font-semibold text-primary">{orderNo(o.orderNumber)}</span>
+            <span className="min-w-0 flex-1">
+              {o.itemCategory}
+              <span className="text-muted-foreground"> · {when(o.createdAt)}</span>
+            </span>
+            {o.rating && <Stars value={o.rating} showValue={false} />}
+            <span>{money(o.price, o.currency)}</span>
+            <OrderStatusBadge status={o.status} />
+          </Link>
+          {menu?.(o)}
+        </li>
+      ))}
+    </ul>
   );
 }

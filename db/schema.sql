@@ -161,3 +161,14 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancelled_at  TIMESTAMPTZ;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancelled_by  UUID REFERENCES users(id);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancel_reason TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS refund_status TEXT;
+
+-- ---------------------------------------------------------------------------
+-- Delivery rating. When verifying a delivery the customer may rate it 1–5
+-- stars and leave a short comment (both optional). A courier's average
+-- rating is the mean over their rated deliveries; unrated ones don't count.
+-- ---------------------------------------------------------------------------
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS rating SMALLINT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS rating_comment TEXT;
+DO $$ BEGIN
+  ALTER TABLE orders ADD CONSTRAINT orders_rating_range CHECK (rating BETWEEN 1 AND 5);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { api, ApiError, type Order } from "@/lib/api";
 import { money, orderNo, when } from "@/lib/format";
 import { OrderStatusBadge } from "@/components/OrderStatusBadge";
+import { Stars } from "@/components/StarRating";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Check, X, PackageCheck } from "lucide-react";
@@ -153,6 +154,12 @@ export default function CourierDashboard() {
                 {o.status === "completed" && (
                   <p className="text-sm text-muted-foreground">
                     Waiting for customer verification…
+                  </p>
+                )}
+                {o.status === "verified" && (
+                  <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                    Customer rating:{" "}
+                    {o.rating ? <Stars value={o.rating} /> : <span>not rated</span>}
                   </p>
                 )}
               </OrderCard>

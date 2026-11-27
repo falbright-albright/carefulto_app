@@ -12,7 +12,9 @@ import {
   listAllOrders,
   listOrdersForCourier,
   listOrdersForCustomer,
+  withoutComment,
 } from "../orders.ts";
+import { parseRating } from "../rating.ts";
 import { notify, notifyAdmins } from "../notifications.ts";
 import { assignPickupRegion } from "../regions.ts";
 
@@ -158,7 +160,7 @@ export async function list(
 ): Promise<Response> {
   let orders;
   if (user.role === "admin") orders = await listAllOrders();
-  else if (user.role === "courier") orders = await listOrdersForCourier(user.id);
+  else if (user.role === "courier") orders = (await listOrdersForCourier(user.id)).map(withoutComment);
   else orders = await listOrdersForCustomer(user.id);
   return json({ orders });
 }
@@ -174,7 +176,7 @@ export async function getOne(
   const allowed =
     user.role === "admin" || order.customerId === user.id || order.courierId === user.id;
   if (!allowed) return error("forbidden", 403);
-  return json({ order });
+  return json({ order: user.role === "courier" ? withoutComment(order) : order });
 }
 
 // POST /api/orders/:id/complete  (courier) — report the delivery completed.
@@ -207,11 +209,12 @@ export async function complete(
   return json({ order: await getOrder(order.id) });
 }
 
-// POST /api/orders/:id/verify  (customer) — verify the delivery completed.
+// POST /api/orders/:id/verify  { rating?, comment? }  (customer) — verify the
+// delivery completed, optionally rating it 1–5 stars with a short comment.
 // When both customer and courier have verified, the order is finalized and
 // admins are notified.
 export async function verify(
-  _req: Request,
+  req: Request,
   p: Record<string, string>,
   user: User,
 ): Promise<Response> {
@@ -221,10 +224,13 @@ export async function verify(
   if (order.status !== "completed") {
     return error(`cannot verify an order in status "${order.status}"`);
   }
+  const rated = parseRating(await readJson(req));
+  if ("error" in rated) return error(rated.error);
 
   const marked = await sql`
     UPDATE orders
-    SET customer_verified_at = now(), updated_at = now()
+    SET customer_verified_at = now(), updated_at = now(),
+        rating = ${rated.rating}, rating_comment = ${rated.comment}
     WHERE id = ${order.id} AND status = 'completed'
     RETURNING id
   `;
@@ -243,14 +249,18 @@ export async function verify(
     await notifyAdmins({
       orderId: order.id,
       type: "order_verified",
-      message: `Order fully verified by customer and courier. Delivery confirmed complete.`,
+      message: rated.rating
+        ? `Order fully verified by customer and courier (rated ${rated.rating}/5). Delivery confirmed complete.`
+        : `Order fully verified by customer and courier. Delivery confirmed complete.`,
       actorId: user.id,
     });
     if (fin.courier_id) {
       await notify({
         orderId: order.id,
         type: "order_verified",
-        message: `Customer verified the delivery. Order is now complete.`,
+        message: rated.rating
+          ? `Customer verified the delivery and rated it ${rated.rating}/5. Order is now complete.`
+          : `Customer verified the delivery. Order is now complete.`,
         actorId: user.id,
         recipientId: fin.courier_id,
       });

@@ -9,6 +9,8 @@ import { money, orderNo, when } from "@/lib/format";
 import { CancelOrderDialog, canCancel } from "@/components/OrderAdminMenu";
 import { OrderStatusBadge } from "@/components/OrderStatusBadge";
 import { RecommendDialog, type Courier } from "@/components/RecommendDialog";
+import { Stars } from "@/components/StarRating";
+import { VerifyDeliveryDialog } from "@/components/VerifyDeliveryDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -189,6 +191,16 @@ function OrderDetails({
             Courier {o.courierVerifiedAt ? `✓ ${when(o.courierVerifiedAt)}` : "—"} · Customer{" "}
             {o.customerVerifiedAt ? `✓ ${when(o.customerVerifiedAt)}` : "—"}
           </Row>
+          {o.status === "verified" && (
+            <Row label="Customer rating">
+              {o.rating ? <Stars value={o.rating} size="lg" /> : <span className="text-muted-foreground">Not rated</span>}
+              {o.ratingComment && (
+                <span className="mt-1 block whitespace-pre-wrap text-muted-foreground">
+                  “{o.ratingComment}”
+                </span>
+              )}
+            </Row>
+          )}
           {o.status === "cancelled" && (
             <Row label="Cancelled">
               {o.cancelledAt ? when(o.cancelledAt) : "—"}
@@ -276,14 +288,7 @@ function OrderActions({
       content = <p className="text-sm text-muted-foreground">Waiting for customer verification…</p>;
     }
   } else if (role === "customer" && o.status === "completed") {
-    content = (
-      <Button
-        size="sm"
-        onClick={() => act(() => api.verifyOrder(o.id), "Delivery verified. Thank you!")}
-      >
-        Verify delivery completed
-      </Button>
-    );
+    content = <VerifyDeliveryDialog order={o} onDone={reload} />;
   }
 
   if (o.status === "verified") {

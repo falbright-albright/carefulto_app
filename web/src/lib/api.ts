@@ -43,12 +43,30 @@ export interface Order {
   courierName: string | null;
   customerVerifiedAt: string | null;
   courierVerifiedAt: string | null;
+  // Customer's 1–5 star rating (null = not rated). The comment is only sent
+  // to the customer and admins.
+  rating: number | null;
+  ratingComment: string | null;
   createdAt: string;
   updatedAt: string;
   cancelledAt: string | null;
   cancelledByName: string | null;
   cancelReason: string | null;
   refundStatus: "pending" | "refunded" | null;
+}
+
+export interface CourierStats {
+  delivered: number;
+  deliveredThisMonth: number;
+  inProgress: number;
+  awaitingReply: number;
+  rejected: number;
+  cancelledWhileAssigned: number;
+  earningsThisMonth: number;
+  earningsAllTime: number;
+  averageRating: number | null; // null until a delivery is rated
+  ratedDeliveries: number;
+  currency: string;
 }
 
 export interface AccountDetails {
@@ -62,17 +80,7 @@ export interface AccountDetails {
     lastOrderAt: string | null;
     currency: string;
   };
-  courier?: {
-    delivered: number;
-    deliveredThisMonth: number;
-    inProgress: number;
-    awaitingReply: number;
-    rejected: number;
-    cancelledWhileAssigned: number;
-    earningsThisMonth: number;
-    earningsAllTime: number;
-    currency: string;
-  };
+  courier?: CourierStats;
   recentOrders: Order[];
 }
 
@@ -273,7 +281,10 @@ export const api = {
   listOrders: () => request<{ orders: Order[] }>("GET", "/orders"),
   getOrder: (id: string) => request<{ order: Order }>("GET", `/orders/${id}`),
   completeOrder: (id: string) => request<{ order: Order }>("POST", `/orders/${id}/complete`),
-  verifyOrder: (id: string) => request<{ order: Order }>("POST", `/orders/${id}/verify`),
+  verifyOrder: (id: string, rating?: { rating: number | null; comment?: string }) =>
+    request<{ order: Order }>("POST", `/orders/${id}/verify`, rating ?? {}),
+  myCourierAccount: () =>
+    request<{ courier: CourierStats; recentOrders: Order[] }>("GET", "/courier/account"),
   acceptOrder: (id: string) => request<{ order: Order }>("POST", `/orders/${id}/accept`),
   rejectOrder: (id: string) => request<{ order: Order }>("POST", `/orders/${id}/reject`),
   cancelOrder: (id: string, reason?: string) =>

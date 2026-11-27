@@ -12,7 +12,8 @@ import { sql } from "../db.ts";
 import { migrateAndSeed } from "../migrate.ts";
 import { cancelOrder, recommend } from "./admin.ts";
 import { accept, reject } from "./courier.ts";
-import { complete, verify } from "./orders.ts";
+import { myAccount } from "./courier.ts";
+import { complete, getOne, verify } from "./orders.ts";
 
 const enabled = process.env.INTEGRATION_DB === "1";
 const post = (body: unknown = {}) =>
@@ -132,5 +133,43 @@ describe.skipIf(!enabled)("order actions re-check status in the UPDATE", () => {
       WHERE order_id = ${id} AND type = 'order_verified' AND recipient_id = ${courier.id}
     `;
     expect(t!.total).toBe(1);
+  });
+
+  test("verify stores an optional rating; couriers see stars but not the comment", async () => {
+    const rater = await makeUser("courier");
+    const ids = [];
+    for (const _ of [0, 1, 2]) {
+      const id = await makeOrder("completed", rater.id);
+      await sql`UPDATE orders SET courier_verified_at = now() WHERE id = ${id}`;
+      ids.push(id);
+    }
+    // Bad input is refused and the order stays unverified.
+    expect((await verify(post({ rating: 6 }), { id: ids[0]! }, customer)).status).toBe(400);
+    expect(await statusOf(ids[0]!)).toBe("completed");
+
+    expect((await verify(post({ rating: 5, comment: " Great " }), { id: ids[0]! }, customer)).status).toBe(200);
+    expect((await verify(post({ rating: 4 }), { id: ids[1]! }, customer)).status).toBe(200);
+    expect((await verify(post(), { id: ids[2]! }, customer)).status).toBe(200); // unrated
+
+    const [row] = await sql`SELECT status, rating, rating_comment FROM orders WHERE id = ${ids[0]!}`;
+    expect(row).toEqual({ status: "verified", rating: 5, rating_comment: "Great" });
+
+    const asCourier = (await (await getOne(post(), { id: ids[0]! }, rater)).json()) as {
+      order: { rating: number; ratingComment: string | null };
+    };
+    expect(asCourier.order.rating).toBe(5);
+    expect(asCourier.order.ratingComment).toBeNull();
+    const asCustomer = (await (await getOne(post(), { id: ids[0]! }, customer)).json()) as {
+      order: { ratingComment: string | null };
+    };
+    expect(asCustomer.order.ratingComment).toBe("Great");
+
+    // Average over rated deliveries only: (5 + 4) / 2.
+    const acct = (await (await myAccount(post(), {}, rater)).json()) as {
+      courier: { averageRating: number; ratedDeliveries: number; delivered: number };
+    };
+    expect(acct.courier.averageRating).toBe(4.5);
+    expect(acct.courier.ratedDeliveries).toBe(2);
+    expect(acct.courier.delivered).toBe(3);
   });
 });
