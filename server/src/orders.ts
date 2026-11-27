@@ -12,6 +12,11 @@ export interface OrderView {
   notes: string | null;
   pickupAddress: string;
   dropoffAddress: string;
+  // Map pins the customer selected (null on old orders placed before pins).
+  pickupLat: number | null;
+  pickupLng: number | null;
+  dropoffLat: number | null;
+  dropoffLng: number | null;
   distanceKm: number;
   distanceSource: string;
   price: number;
@@ -33,6 +38,7 @@ export interface OrderView {
 const SELECT = sql`
   SELECT o.id, o.order_number, o.status, o.item_category, o.item_description, o.notes,
          o.pickup_address, o.dropoff_address,
+         o.pickup_lat, o.pickup_lng, o.dropoff_lat, o.dropoff_lng,
          o.distance_km, o.distance_source, o.price, o.currency,
          o.customer_id, cu.name AS customer_name,
          o.courier_id, co.name AS courier_name,
@@ -56,6 +62,10 @@ function toView(r: any): OrderView {
     notes: r.notes,
     pickupAddress: r.pickup_address,
     dropoffAddress: r.dropoff_address,
+    pickupLat: r.pickup_lat === null ? null : Number(r.pickup_lat),
+    pickupLng: r.pickup_lng === null ? null : Number(r.pickup_lng),
+    dropoffLat: r.dropoff_lat === null ? null : Number(r.dropoff_lat),
+    dropoffLng: r.dropoff_lng === null ? null : Number(r.dropoff_lng),
     distanceKm: Number(r.distance_km),
     distanceSource: r.distance_source,
     price: Number(r.price),

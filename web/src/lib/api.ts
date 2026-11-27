@@ -29,6 +29,10 @@ export interface Order {
   notes: string | null;
   pickupAddress: string;
   dropoffAddress: string;
+  pickupLat: number | null;
+  pickupLng: number | null;
+  dropoffLat: number | null;
+  dropoffLng: number | null;
   distanceKm: number;
   distanceSource: string;
   price: number;

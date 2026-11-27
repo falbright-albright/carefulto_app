@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Ban, Check, PackageCheck, X } from "lucide-react";
+import { ArrowLeft, Ban, Check, Navigation, PackageCheck, X } from "lucide-react";
+import { currentPosition, deliveryDirectionsUrl } from "@/lib/googleMaps";
 import { api, ApiError, type Order } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { money, orderNo, when } from "@/lib/format";
@@ -236,13 +237,20 @@ function OrderActions({
           >
             <X className="h-4 w-4" /> Reject
           </Button>
+          <DirectionsButton order={o} />
         </>
       );
     } else if (o.status === "accepted") {
       content = (
-        <Button size="sm" onClick={() => act(() => api.completeOrder(o.id), "Marked as delivered")}>
-          <PackageCheck className="h-4 w-4" /> Report delivered
-        </Button>
+        <>
+          <DirectionsButton order={o} />
+          <Button
+            size="sm"
+            onClick={() => act(() => api.completeOrder(o.id), "Marked as delivered")}
+          >
+            <PackageCheck className="h-4 w-4" /> Report delivered
+          </Button>
+        </>
       );
     } else if (o.status === "completed") {
       content = <p className="text-sm text-muted-foreground">Waiting for customer verification…</p>;
@@ -282,5 +290,44 @@ function AdminCancelButton({ order, onDone }: { order: Order; onDone: () => void
       </Button>
       <CancelOrderDialog order={order} open={open} onOpenChange={setOpen} onDone={onDone} />
     </>
+  );
+}
+
+// Courier: open the whole job in Google Maps — from where they are now (if
+// the browser shares it) to the pickup, then on to the drop-off.
+function DirectionsButton({ order: o }: { order: Order }) {
+  const [busy, setBusy] = useState(false);
+
+  const open = async () => {
+    // Open the tab now, inside the click: browsers block pop-ups opened
+    // later, and asking for the location takes a moment.
+    const tab = window.open("", "_blank");
+    if (tab) tab.document.title = "Opening Google Maps…";
+    setBusy(true);
+    const here = await currentPosition();
+    setBusy(false);
+    const url = deliveryDirectionsUrl(
+      { address: o.pickupAddress, lat: o.pickupLat, lng: o.pickupLng },
+      { address: o.dropoffAddress, lat: o.dropoffLat, lng: o.dropoffLng },
+      here,
+    );
+    if (tab) {
+      tab.opener = null;
+      tab.location.href = url;
+    } else {
+      window.location.href = url; // pop-ups blocked: go in this tab instead
+    }
+    toast.message(
+      here
+        ? "Directions opened: your location → pickup → drop-off"
+        : "Your location isn't available, so directions start at the pickup",
+    );
+  };
+
+  return (
+    <Button size="sm" variant="outline" onClick={open} disabled={busy}>
+      <Navigation className="h-4 w-4" />
+      {busy ? "Getting your location…" : "Directions in Google Maps"}
+    </Button>
   );
 }
