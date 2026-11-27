@@ -62,8 +62,8 @@ describe.skipIf(!enabled)("support requests", () => {
     customer = await makeUser("customer");
     stranger = await makeUser("customer");
   });
-  // No sql.end() here: bun runs every integration file in one process and
-  // orderGuards.integration.test.ts closes the shared connection.
+  // No sql.end(): bun runs every integration file in one process and shares
+  // the connection (see orderGuards.integration.test.ts).
 
   test("a courier complaint is filed against the order's courier and notifies admins", async () => {
     const orderId = await makeOrder(customer, courier.id);
