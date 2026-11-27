@@ -12,6 +12,7 @@ import * as adminR from "./routes/admin.ts";
 import * as courierR from "./routes/courier.ts";
 import * as notifR from "./routes/notifications.ts";
 import * as analyticsR from "./routes/analytics.ts";
+import * as supportR from "./routes/support.ts";
 import { backfillPickupRegions, ensureBaselineRegions } from "./regions.ts";
 
 type Handler = (req: Request, params: Record<string, string>, user: User) => Promise<Response>;
@@ -63,6 +64,13 @@ const routes: Route[] = [
   { method: "POST", pattern: "/api/admin/users/:id/unban", access: ["admin"], handler: adminR.unbanUser },
   { method: "GET", pattern: "/api/admin/analytics", access: ["admin"], handler: analyticsR.overview },
   { method: "GET", pattern: "/api/admin/analytics/regions", access: ["admin"], handler: analyticsR.regions },
+
+  // --- support requests ("Contact us") ---
+  { method: "POST", pattern: "/api/support/requests", access: ["customer"], handler: supportR.create },
+  { method: "GET", pattern: "/api/support/requests", access: ["customer", "admin"], handler: supportR.list },
+  { method: "GET", pattern: "/api/support/requests/:id", access: ["customer", "admin"], handler: supportR.getOne },
+  { method: "POST", pattern: "/api/support/requests/:id/messages", access: ["customer", "admin"], handler: supportR.reply },
+  { method: "POST", pattern: "/api/support/requests/:id/status", access: ["admin"], handler: supportR.setStatus },
 
   // --- notifications ---
   { method: "GET", pattern: "/api/notifications", access: ["customer", "courier", "admin"], handler: notifR.list },

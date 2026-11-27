@@ -6,7 +6,7 @@
 // Skipped unless INTEGRATION_DB=1, because it needs a throwaway database:
 //   INTEGRATION_DB=1 DATABASE_URL=postgres://.../scratch bun test orderGuards
 // CI runs it in the e2e job against a fresh Postgres service.
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import type { User } from "../auth.ts";
 import { sql } from "../db.ts";
 import { migrateAndSeed } from "../migrate.ts";
@@ -57,9 +57,9 @@ describe.skipIf(!enabled)("order actions re-check status in the UPDATE", () => {
     courier = await makeUser("courier");
     customer = await makeUser("customer");
   });
-  afterAll(async () => {
-    await sql.end();
-  });
+  // No sql.end(): bun runs every integration file in one process, so closing
+  // the shared connection here would break whichever file runs next. The
+  // test runner exits on its own when the tests finish.
 
   test("a cancelled order can't then be accepted, rejected or reported delivered", async () => {
     const recommended = await makeOrder("recommended", courier.id);

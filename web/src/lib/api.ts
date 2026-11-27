@@ -86,11 +86,49 @@ export interface OrderPage {
 
 export interface Notification {
   id: string;
-  order_id: string;
+  order_id: string | null;
+  support_request_id: string | null;
   type: string;
   message: string;
   read_at: string | null;
   created_at: string;
+}
+
+export type SupportKind = "delivery" | "courier" | "question" | "comment";
+export type SupportStatus = "open" | "in_review" | "resolved";
+
+export interface SupportRequest {
+  id: string;
+  ref: string; // "RQ-1001"
+  kind: SupportKind;
+  status: SupportStatus;
+  subject: string;
+  customerId: string;
+  customerName: string;
+  orderId: string | null;
+  orderNumber: number | null;
+  courierId: string | null;
+  courierName: string | null;
+  messageCount: number;
+  lastAuthorRole: "customer" | "admin" | null;
+  lastMessageAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+}
+
+export interface SupportMessage {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorRole: "customer" | "admin";
+  body: string;
+  createdAt: string;
+}
+
+export interface SupportThread {
+  request: SupportRequest;
+  messages: SupportMessage[];
 }
 
 export interface AdminUser {
@@ -311,6 +349,33 @@ export const api = {
     ),
   regionAnalytics: (month: string | "all") =>
     request<RegionAnalytics>("GET", `/admin/analytics/regions?month=${encodeURIComponent(month)}`),
+
+  // support requests ("Contact us")
+  createSupportRequest: (input: {
+    kind: SupportKind;
+    orderId?: string;
+    subject: string;
+    message: string;
+  }) => request<{ request: SupportRequest }>("POST", "/support/requests", input),
+  // Customers get their own; admins get the filtered inbox plus the active count.
+  supportRequests: (filter?: {
+    status?: SupportStatus | "active" | "all";
+    kind?: SupportKind | "all";
+  }) => {
+    const qs = new URLSearchParams();
+    if (filter?.status) qs.set("status", filter.status);
+    if (filter?.kind) qs.set("kind", filter.kind);
+    const s = qs.toString();
+    return request<{ requests: SupportRequest[]; active?: number }>(
+      "GET",
+      `/support/requests${s ? `?${s}` : ""}`,
+    );
+  },
+  supportRequest: (id: string) => request<SupportThread>("GET", `/support/requests/${id}`),
+  replySupportRequest: (id: string, message: string) =>
+    request<SupportThread>("POST", `/support/requests/${id}/messages`, { message }),
+  setSupportStatus: (id: string, status: SupportStatus) =>
+    request<SupportThread>("POST", `/support/requests/${id}/status`, { status }),
 
   // notifications
   notifications: () =>
