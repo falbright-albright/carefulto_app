@@ -1,5 +1,6 @@
 import { config } from "./config.ts";
 import { sql } from "./db.ts";
+import { error } from "./http.ts";
 import { ORDER_PAGE_SIZE, type OrderSearch } from "./orderSearch.ts";
 
 // Shape returned to clients. Includes joined customer/courier names.
@@ -103,6 +104,16 @@ export async function listOrdersForCustomer(customerId: string): Promise<OrderVi
 export async function listOrdersForCourier(courierId: string): Promise<OrderView[]> {
   const rows = await sql`${SELECT} WHERE o.courier_id = ${courierId} ORDER BY o.created_at DESC`;
   return rows.map(toView);
+}
+
+// 409 for an order action whose guarded UPDATE matched nothing: someone else
+// (e.g. an admin cancelling) changed the order between our read and write.
+export async function changedMeanwhile(id: string): Promise<Response> {
+  const now = await getOrder(id);
+  return error(
+    `this order changed while you were acting on it (it is now ${now?.status ?? "gone"}); refresh and try again`,
+    409,
+  );
 }
 
 export async function listAllOrders(): Promise<OrderView[]> {

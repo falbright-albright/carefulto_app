@@ -1,7 +1,13 @@
 import { sql } from "../db.ts";
 import { json, error, readJson, reqStr } from "../http.ts";
 import { hashPassword, type User } from "../auth.ts";
-import { getOrder, listOrdersForCourier, listOrdersForCustomer, searchOrders } from "../orders.ts";
+import {
+  changedMeanwhile,
+  getOrder,
+  listOrdersForCourier,
+  listOrdersForCustomer,
+  searchOrders,
+} from "../orders.ts";
 import { config } from "../config.ts";
 import { formatOrderNumber, parseOrderSearch } from "../orderSearch.ts";
 import { notify } from "../notifications.ts";
@@ -92,11 +98,13 @@ export async function recommend(req: Request, p: Record<string, string>, admin: 
   const courier = courierRows[0] as { id: string; name: string } | undefined;
   if (!courier) return error("courier not found or is banned", 404);
 
-  await sql`
+  const updated = await sql`
     UPDATE orders
     SET courier_id = ${courierId}, status = 'recommended', updated_at = now()
-    WHERE id = ${order.id}
+    WHERE id = ${order.id} AND status IN ('placed', 'rejected')
+    RETURNING id
   `;
+  if (updated.length === 0) return changedMeanwhile(order.id);
   await notify({
     orderId: order.id,
     type: "order_recommended",

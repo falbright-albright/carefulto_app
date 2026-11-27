@@ -6,7 +6,13 @@ import { route, RouteUnavailableError, withinOntario, type RoutePoint } from "..
 import { priceForDistance } from "../pricing.ts";
 import { formatOrderNumber } from "../orderSearch.ts";
 import { config } from "../config.ts";
-import { getOrder, listAllOrders, listOrdersForCourier, listOrdersForCustomer } from "../orders.ts";
+import {
+  changedMeanwhile,
+  getOrder,
+  listAllOrders,
+  listOrdersForCourier,
+  listOrdersForCustomer,
+} from "../orders.ts";
 import { notify, notifyAdmins } from "../notifications.ts";
 import { assignPickupRegion } from "../regions.ts";
 
@@ -184,11 +190,13 @@ export async function complete(
   if (order.status !== "accepted")
     return error(`cannot complete an order in status "${order.status}"`);
 
-  await sql`
+  const done = await sql`
     UPDATE orders
     SET status = 'completed', courier_verified_at = now(), updated_at = now()
-    WHERE id = ${order.id}
+    WHERE id = ${order.id} AND status = 'accepted' AND courier_id = ${user.id}
+    RETURNING id
   `;
+  if (done.length === 0) return changedMeanwhile(order.id);
   await notify({
     orderId: order.id,
     type: "order_completed",
@@ -214,29 +222,37 @@ export async function verify(
     return error(`cannot verify an order in status "${order.status}"`);
   }
 
-  await sql`
+  const marked = await sql`
     UPDATE orders
     SET customer_verified_at = now(), updated_at = now()
-    WHERE id = ${order.id}
+    WHERE id = ${order.id} AND status = 'completed'
+    RETURNING id
   `;
+  if (marked.length === 0) return changedMeanwhile(order.id);
 
-  const updated = await getOrder(order.id);
-  // Both verified -> finalize.
-  if (updated && updated.customerVerifiedAt && updated.courierVerifiedAt) {
-    await sql`UPDATE orders SET status = 'verified', updated_at = now() WHERE id = ${order.id}`;
+  // Both verified -> finalize. Guarded so only one request finalizes (and
+  // notifies), even if the customer double-submits.
+  const finalized = await sql<{ courier_id: string | null }[]>`
+    UPDATE orders SET status = 'verified', updated_at = now()
+    WHERE id = ${order.id} AND status = 'completed'
+      AND customer_verified_at IS NOT NULL AND courier_verified_at IS NOT NULL
+    RETURNING courier_id
+  `;
+  const fin = finalized[0];
+  if (fin) {
     await notifyAdmins({
       orderId: order.id,
       type: "order_verified",
       message: `Order fully verified by customer and courier. Delivery confirmed complete.`,
       actorId: user.id,
     });
-    if (updated.courierId) {
+    if (fin.courier_id) {
       await notify({
         orderId: order.id,
         type: "order_verified",
         message: `Customer verified the delivery. Order is now complete.`,
         actorId: user.id,
-        recipientId: updated.courierId,
+        recipientId: fin.courier_id,
       });
     }
   }

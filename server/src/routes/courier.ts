@@ -1,7 +1,7 @@
 import { sql } from "../db.ts";
 import { json, error } from "../http.ts";
 import type { User } from "../auth.ts";
-import { getOrder } from "../orders.ts";
+import { changedMeanwhile, getOrder } from "../orders.ts";
 import { notify, notifyAdmins } from "../notifications.ts";
 
 // POST /api/orders/:id/accept  (courier)
@@ -13,7 +13,14 @@ export async function accept(_req: Request, p: Record<string, string>, user: Use
     return error(`cannot accept an order in status "${order.status}"`);
   }
 
-  await sql`UPDATE orders SET status = 'accepted', updated_at = now() WHERE id = ${order.id}`;
+  // Re-check status and assignment inside the UPDATE: an admin may have
+  // cancelled or reassigned the order since it was read above.
+  const updated = await sql`
+    UPDATE orders SET status = 'accepted', updated_at = now()
+    WHERE id = ${order.id} AND status = 'recommended' AND courier_id = ${user.id}
+    RETURNING id
+  `;
+  if (updated.length === 0) return changedMeanwhile(order.id);
   await notify({
     orderId: order.id,
     type: "order_accepted",
@@ -41,10 +48,12 @@ export async function reject(_req: Request, p: Record<string, string>, user: Use
 
   // Clear the courier and send it back to the queue (status 'placed' so the
   // admin can recommend it again to someone else).
-  await sql`
+  const updated = await sql`
     UPDATE orders SET courier_id = NULL, status = 'placed', updated_at = now()
-    WHERE id = ${order.id}
+    WHERE id = ${order.id} AND status = 'recommended' AND courier_id = ${user.id}
+    RETURNING id
   `;
+  if (updated.length === 0) return changedMeanwhile(order.id);
   await notifyAdmins({
     orderId: order.id,
     type: "order_rejected",
