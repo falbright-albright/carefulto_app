@@ -4,6 +4,9 @@ import { defineConfig, devices } from "@playwright/test";
 // Override with BASE_URL to point at another environment.
 export default defineConfig({
   testDir: "./e2e",
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 1 : 0,
+  reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: process.env.BASE_URL ?? "http://localhost:3001",
     trace: "on-first-retry",
