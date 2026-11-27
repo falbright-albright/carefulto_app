@@ -27,14 +27,9 @@ import { MapPin, Truck } from "lucide-react";
 
 // Shown as the grey placeholder in the delivery-notes field.
 const NOTES_PLACEHOLDER =
-  "Please share any additional details that will help us complete your delivery. " +
-  "If your exact pickup or drop-off location did not appear in our address suggestions, " +
-  "select the nearest available address above and describe the precise location here — " +
-  "for example, the building name, unit or suite number, entrance, loading dock, or a nearby landmark. " +
-  "Our address and pricing tools currently rely on free mapping data that does not yet include every address, " +
-  "and we apologize for any inconvenience this may cause. " +
-  "Please include as much information as you can: the more detail you provide, " +
-  "the better our courier can pick up and deliver your item exactly where you need it.";
+  "Tell your courier exactly where to pick up and drop off: building name, unit, " +
+  "entrance, buzzer code or a nearby landmark. If your address wasn't in the " +
+  "suggestions, pick the closest one and describe the real location here.";
 
 export default function CustomerDashboard() {
   const [categories, setCategories] = useState<string[]>([]);
@@ -234,7 +229,9 @@ export default function CustomerDashboard() {
                 <Label htmlFor="notes">Delivery notes (optional)</Label>
                 <Textarea
                   id="notes"
-                  rows={7}
+                  rows={3}
+                  // The hint wraps to ~7 lines on a phone but 3 on desktop.
+                  className="min-h-[10rem] sm:min-h-0"
                   maxLength={2000}
                   placeholder={NOTES_PLACEHOLDER}
                   value={notes}
