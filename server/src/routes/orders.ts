@@ -4,6 +4,7 @@ import type { User } from "../auth.ts";
 import { isValidCategory } from "../categories.ts";
 import { route, RouteUnavailableError, withinOntario, type RoutePoint } from "../routing.ts";
 import { priceForDistance } from "../pricing.ts";
+import { formatOrderNumber } from "../orderSearch.ts";
 import { config } from "../config.ts";
 import { getOrder, listAllOrders, listOrdersForCourier, listOrdersForCustomer } from "../orders.ts";
 import { notify, notifyAdmins } from "../notifications.ts";
@@ -112,7 +113,7 @@ export async function create(
     throw err;
   }
 
-  const rows = await sql<{ id: string }[]>`
+  const rows = await sql<{ id: string; order_number: number }[]>`
     INSERT INTO orders (
       customer_id, item_category, item_description, notes,
       pickup_address, pickup_lat, pickup_lng,
@@ -124,9 +125,10 @@ export async function create(
       ${dropoff}, ${points.dropoff.lat}, ${points.dropoff.lng},
       ${q.distanceKm}, ${q.source}, ${q.price}, ${q.currency}, 'placed'
     )
-    RETURNING id
+    RETURNING id, order_number
   `;
   const orderId = rows[0]!.id;
+  const ref = formatOrderNumber(rows[0]!.order_number);
   // Tag the pickup's municipality for analytics. Fire-and-forget: it never
   // throws and must not delay or fail order placement.
   void assignPickupRegion(orderId, points.pickup.lat, points.pickup.lng);
@@ -134,7 +136,7 @@ export async function create(
   await notifyAdmins({
     orderId,
     type: "order_placed",
-    message: `New order placed by ${user.name} (${itemCategory}).`,
+    message: `New order ${ref} placed by ${user.name} (${itemCategory}).`,
     actorId: user.id,
   });
 

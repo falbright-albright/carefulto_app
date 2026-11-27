@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Check, PackageCheck, X } from "lucide-react";
+import { ArrowLeft, Ban, Check, PackageCheck, X } from "lucide-react";
 import { api, ApiError, type Order } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { money, when } from "@/lib/format";
+import { money, orderNo, when } from "@/lib/format";
+import { CancelOrderDialog, canCancel } from "@/components/OrderAdminMenu";
 import { OrderStatusBadge } from "@/components/OrderStatusBadge";
 import { RecommendDialog, type Courier } from "@/components/RecommendDialog";
 import { Button } from "@/components/ui/button";
@@ -76,7 +77,9 @@ export default function OrderPage() {
         </Link>
       </Button>
 
-      {state.kind === "loading" && <p className="py-12 text-center text-muted-foreground">Loading order…</p>}
+      {state.kind === "loading" && (
+        <p className="py-12 text-center text-muted-foreground">Loading order…</p>
+      )}
       {state.kind === "not_found" && (
         <Message title="Order not found" body="This order doesn't exist or has been removed." />
       )}
@@ -135,10 +138,11 @@ function OrderDetails({ order: o, actions }: { order: Order; actions: React.Reac
     <Card>
       <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
         <div>
-          <CardTitle className="text-2xl">{o.itemCategory}</CardTitle>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Placed {when(o.createdAt)} · Order {o.id.slice(0, 8)}
+          <p className="font-mono text-sm font-semibold text-primary">
+            Order {orderNo(o.orderNumber)}
           </p>
+          <CardTitle className="text-2xl">{o.itemCategory}</CardTitle>
+          <p className="mt-1 text-sm text-muted-foreground">Placed {when(o.createdAt)}</p>
         </div>
         <OrderStatusBadge status={o.status} />
       </CardHeader>
@@ -162,6 +166,24 @@ function OrderDetails({ order: o, actions }: { order: Order; actions: React.Reac
             Courier {o.courierVerifiedAt ? `✓ ${when(o.courierVerifiedAt)}` : "—"} · Customer{" "}
             {o.customerVerifiedAt ? `✓ ${when(o.customerVerifiedAt)}` : "—"}
           </Row>
+          {o.status === "cancelled" && (
+            <Row label="Cancelled">
+              {o.cancelledAt ? when(o.cancelledAt) : "—"}
+              {o.cancelledByName ? ` by ${o.cancelledByName}` : ""}
+              {o.cancelReason && (
+                <span className="mt-1 block text-muted-foreground">Reason: {o.cancelReason}</span>
+              )}
+            </Row>
+          )}
+          {o.refundStatus && (
+            <Row label="Refund">
+              {o.refundStatus === "pending" ? (
+                <span className="text-amber-600">Pending — will be processed by CarefulTO</span>
+              ) : (
+                "Refunded"
+              )}
+            </Row>
+          )}
           <Row label="Last updated">{when(o.updatedAt)}</Row>
         </dl>
         {actions}
@@ -188,11 +210,14 @@ function OrderActions({
 }) {
   let content: React.ReactNode = null;
 
-  if (role === "admin" && (o.status === "placed" || o.status === "rejected")) {
+  if (role === "admin" && canCancel(o)) {
     content = (
       <>
-        <RecommendDialog order={o} couriers={couriers} onDone={reload} />
-        {couriers.length === 0 && (
+        {(o.status === "placed" || o.status === "rejected") && (
+          <RecommendDialog order={o} couriers={couriers} onDone={reload} />
+        )}
+        <AdminCancelButton order={o} onDone={reload} />
+        {couriers.length === 0 && (o.status === "placed" || o.status === "rejected") && (
           <p className="text-sm text-amber-600">No couriers exist yet — create one first.</p>
         )}
       </>
@@ -224,16 +249,38 @@ function OrderActions({
     }
   } else if (role === "customer" && o.status === "completed") {
     content = (
-      <Button size="sm" onClick={() => act(() => api.verifyOrder(o.id), "Delivery verified. Thank you!")}>
+      <Button
+        size="sm"
+        onClick={() => act(() => api.verifyOrder(o.id), "Delivery verified. Thank you!")}
+      >
         Verify delivery completed
       </Button>
     );
   }
 
   if (o.status === "verified") {
-    content = <p className="text-sm font-medium text-emerald-600">✓ Delivery confirmed complete.</p>;
+    content = (
+      <p className="text-sm font-medium text-emerald-600">✓ Delivery confirmed complete.</p>
+    );
   }
 
   if (!content) return null;
   return <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-4">{content}</div>;
+}
+
+function AdminCancelButton({ order, onDone }: { order: Order; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        className="text-destructive"
+        onClick={() => setOpen(true)}
+      >
+        <Ban className="h-4 w-4" /> Cancel order
+      </Button>
+      <CancelOrderDialog order={order} open={open} onOpenChange={setOpen} onDone={onDone} />
+    </>
+  );
 }

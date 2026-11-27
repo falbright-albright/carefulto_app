@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { OrderTitleLink, useOpenOrderOnClick } from "@/components/OrderLink";
 import { toast } from "sonner";
 import { api, ApiError, type Order } from "@/lib/api";
-import { money, when } from "@/lib/format";
+import { money, orderNo, when } from "@/lib/format";
 import { OrderStatusBadge } from "@/components/OrderStatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -49,6 +49,7 @@ export default function CourierDashboard() {
       <CardContent className="pt-6">
         <div className="mb-2 flex items-start justify-between gap-2">
           <div>
+            <p className="font-mono text-xs font-semibold text-primary">{orderNo(o.orderNumber)}</p>
             <OrderTitleLink id={o.id}>{o.itemCategory}</OrderTitleLink>
             <p className="text-sm text-muted-foreground">
               For {o.customerName} · {when(o.createdAt)}

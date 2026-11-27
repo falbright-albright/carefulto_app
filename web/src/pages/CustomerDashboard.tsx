@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { OrderTitleLink, useOpenOrderOnClick } from "@/components/OrderLink";
 import { toast } from "sonner";
 import { api, ApiError, type AddressSuggestion, type Order, type Quote } from "@/lib/api";
-import { money, when } from "@/lib/format";
+import { money, orderNo, when } from "@/lib/format";
 import { OrderStatusBadge } from "@/components/OrderStatusBadge";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { LocationMap } from "@/components/LocationMap";
@@ -285,6 +285,9 @@ export default function CustomerDashboard() {
                   <CardContent className="pt-6">
                     <div className="mb-2 flex items-start justify-between gap-2">
                       <div>
+                        <p className="font-mono text-xs font-semibold text-primary">
+                          {orderNo(o.orderNumber)}
+                        </p>
                         <OrderTitleLink id={o.id}>{o.itemCategory}</OrderTitleLink>
                         <p className="text-sm text-muted-foreground">{when(o.createdAt)}</p>
                       </div>

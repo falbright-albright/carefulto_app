@@ -14,6 +14,7 @@ import SupportPage from "@/site/SupportPage";
 import CancelPage from "@/site/CancelPage";
 import LegalPage, { NotFoundPage } from "@/site/LegalPage";
 import OrderPage from "@/pages/OrderPage";
+import AccountPage from "@/pages/AccountPage";
 
 function Header() {
   const { user, logout } = useAuth();
@@ -115,6 +116,14 @@ export default function App() {
         element={
           <SignedIn loading={loading} user={user}>
             <Dashboard />
+          </SignedIn>
+        }
+      />
+      <Route
+        path="/admin/users/:id"
+        element={
+          <SignedIn loading={loading} user={user}>
+            <AccountPage />
           </SignedIn>
         }
       />
