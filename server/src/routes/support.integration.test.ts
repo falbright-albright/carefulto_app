@@ -44,12 +44,15 @@ async function makeOrder(owner: User, courierId: string | null): Promise<string>
 // biome-ignore lint/suspicious/noExplicitAny: test JSON
 const body = async (r: Response): Promise<any> => r.json();
 
-const notificationsFor = async (u: User, requestId: string) =>
-  sql<{ type: string }[]>`
-    SELECT type FROM order_events
-    WHERE recipient_id = ${u.id} AND support_request_id = ${requestId}
-    ORDER BY created_at
-  `;
+// Notification types sent to `u` about one request, oldest first.
+const notificationsFor = async (u: User, requestId: string): Promise<string[]> =>
+  (
+    await sql<{ type: string }[]>`
+      SELECT type FROM order_events
+      WHERE recipient_id = ${u.id} AND support_request_id = ${requestId}
+      ORDER BY created_at
+    `
+  ).map((n) => n.type);
 
 describe.skipIf(!enabled)("support requests", () => {
   beforeAll(async () => {
@@ -81,9 +84,7 @@ describe.skipIf(!enabled)("support requests", () => {
       lastAuthorRole: "customer",
     });
     expect(request.ref).toMatch(/^RQ-\d+$/);
-    expect(await notificationsFor(admin, request.id)).toEqual([
-      { type: "support_request_created" },
-    ]);
+    expect(await notificationsFor(admin, request.id)).toEqual(["support_request_created"]);
   });
 
   test("customers can only file about their own orders, and courier complaints need a courier", async () => {
@@ -133,10 +134,7 @@ describe.skipIf(!enabled)("support requests", () => {
     const resolved = await body(await setStatus(post({ status: "resolved" }), { id }, admin));
     expect(resolved.request.status).toBe("resolved");
     expect(resolved.request.resolvedAt).not.toBeNull();
-    expect((await notificationsFor(customer, id)).map((n) => n.type)).toEqual([
-      "support_reply",
-      "support_status",
-    ]);
+    expect(await notificationsFor(customer, id)).toEqual(["support_reply", "support_status"]);
 
     // Customer replies on a resolved request -> reopened, admins notified.
     const reopened = await body(await reply(post({ message: "And holidays?" }), { id }, customer));
@@ -145,9 +143,7 @@ describe.skipIf(!enabled)("support requests", () => {
       resolvedAt: null,
       lastAuthorRole: "customer",
     });
-    expect((await notificationsFor(admin, id)).map((n) => n.type)).toContain(
-      "support_customer_reply",
-    );
+    expect(await notificationsFor(admin, id)).toContain("support_customer_reply");
 
     // Bad status / empty reply are rejected.
     expect((await setStatus(post({ status: "closed" }), { id }, admin)).status).toBe(400);
