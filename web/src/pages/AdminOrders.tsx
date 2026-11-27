@@ -178,7 +178,15 @@ export default function AdminOrders({ couriers }: { couriers: Courier[] }) {
                   <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                     {when(o.createdAt)}
                   </TableCell>
-                  <TableCell>{o.customerName}</TableCell>
+                  <TableCell>
+                    <Link
+                      to={`/admin/users/${o.customerId}`}
+                      className="text-primary hover:underline"
+                      title={`View ${o.customerName}'s account`}
+                    >
+                      {o.customerName}
+                    </Link>
+                  </TableCell>
                   <TableCell>
                     <OrderTitleLink id={o.id}>{o.itemCategory}</OrderTitleLink>
                   </TableCell>
