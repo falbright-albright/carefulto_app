@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { api, ApiError, type AdminUser, type Order } from "@/lib/api";
-import { money, when } from "@/lib/format";
-import { OrderStatusBadge } from "@/components/OrderStatusBadge";
+import { api, ApiError, type AdminUser } from "@/lib/api";
+import { when } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,7 +34,8 @@ import {
 } from "@/components/ui/select";
 import { UserPlus } from "lucide-react";
 import AnalyticsPanel from "@/pages/AnalyticsPanel";
-import { RecommendDialog, type Courier } from "@/components/RecommendDialog";
+import AdminOrders from "@/pages/AdminOrders";
+import type { Courier } from "@/components/RecommendDialog";
 
 function CreateUserDialog({ onDone }: { onDone: () => void }) {
   const [open, setOpen] = useState(false);
@@ -75,7 +76,9 @@ function CreateUserDialog({ onDone }: { onDone: () => void }) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create courier or admin</DialogTitle>
-          <DialogDescription>Customers sign up themselves; you create staff here.</DialogDescription>
+          <DialogDescription>
+            Customers sign up themselves; you create staff here.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
@@ -96,7 +99,12 @@ function CreateUserDialog({ onDone }: { onDone: () => void }) {
           </div>
           <div className="space-y-2">
             <Label htmlFor="cu-email">Email</Label>
-            <Input id="cu-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Input
+              id="cu-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="cu-pw">Temporary password</Label>
@@ -120,18 +128,12 @@ function CreateUserDialog({ onDone }: { onDone: () => void }) {
 }
 
 export default function AdminDashboard() {
-  const [orders, setOrders] = useState<Order[]>([]);
   const [couriers, setCouriers] = useState<Courier[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
 
   const load = async () => {
     try {
-      const [o, c, u] = await Promise.all([
-        api.listOrders(),
-        api.listCouriers(),
-        api.listUsers(),
-      ]);
-      setOrders(o.orders);
+      const [c, u] = await Promise.all([api.listCouriers(), api.listUsers()]);
       setCouriers(c.couriers);
       setUsers(u.users);
     } catch {
@@ -160,85 +162,19 @@ export default function AdminDashboard() {
     }
   };
 
-  const verificationCell = (o: Order) => {
-    if (o.status === "verified") return <span className="text-emerald-600">Both ✓</span>;
-    if (o.status === "completed") {
-      return (
-        <span className="text-xs text-muted-foreground">
-          Courier ✓ · Customer {o.customerVerifiedAt ? "✓" : "…"}
-        </span>
-      );
-    }
-    return <span className="text-muted-foreground">—</span>;
-  };
-
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto max-w-7xl">
       <h1 className="mb-6 text-2xl font-bold">Admin dashboard</h1>
 
       <Tabs defaultValue="orders">
         <TabsList className="mb-4">
-          <TabsTrigger value="orders">Orders ({orders.length})</TabsTrigger>
+          <TabsTrigger value="orders">Orders</TabsTrigger>
           <TabsTrigger value="users">Users ({users.length})</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
 
         <TabsContent value="orders">
-          {orders.length === 0 ? (
-            <p className="py-12 text-center text-muted-foreground">No orders yet.</p>
-          ) : (
-            <div className="rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Placed</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Item</TableHead>
-                    <TableHead>Route</TableHead>
-                    <TableHead>Price</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Courier</TableHead>
-                    <TableHead>Verified</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {orders.map((o) => (
-                    <TableRow key={o.id}>
-                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                        {when(o.createdAt)}
-                      </TableCell>
-                      <TableCell>{o.customerName}</TableCell>
-                      <TableCell>{o.itemCategory}</TableCell>
-                      <TableCell className="max-w-[220px] text-xs">
-                        <div className="truncate">{o.pickupAddress}</div>
-                        <div className="truncate text-muted-foreground">→ {o.dropoffAddress}</div>
-                        <div className="text-muted-foreground">{o.distanceKm} km</div>
-                        {o.notes && (
-                          <div className="mt-1 whitespace-pre-wrap text-foreground" title={o.notes}>
-                            <span className="text-muted-foreground">Notes:</span> {o.notes}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {money(o.price, o.currency)}
-                      </TableCell>
-                      <TableCell>
-                        <OrderStatusBadge status={o.status} />
-                      </TableCell>
-                      <TableCell className="text-sm">{o.courierName ?? "—"}</TableCell>
-                      <TableCell className="whitespace-nowrap text-sm">{verificationCell(o)}</TableCell>
-                      <TableCell className="text-right">
-                        {(o.status === "placed" || o.status === "rejected") && (
-                          <RecommendDialog order={o} couriers={couriers} onDone={load} />
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <AdminOrders couriers={couriers} />
           {couriers.length === 0 && (
             <p className="mt-3 text-sm text-amber-600">
               No couriers exist yet — create one in the Users tab before recommending orders.
@@ -265,7 +201,14 @@ export default function AdminDashboard() {
               <TableBody>
                 {users.map((u) => (
                   <TableRow key={u.id}>
-                    <TableCell className="font-medium">{u.name}</TableCell>
+                    <TableCell>
+                      <Link
+                        to={`/admin/users/${u.id}`}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        {u.name}
+                      </Link>
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{u.email}</TableCell>
                     <TableCell className="capitalize">{u.role}</TableCell>
                     <TableCell>
@@ -275,7 +218,9 @@ export default function AdminDashboard() {
                         <Badge variant="success">Active</Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{when(u.created_at)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {when(u.created_at)}
+                    </TableCell>
                     <TableCell className="text-right">
                       {u.role !== "admin" && (
                         <Button

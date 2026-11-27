@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
+import { DirectionsButton } from "@/components/DirectionsButton";
+import { OrderTitleLink, useOpenOrderOnClick } from "@/components/OrderLink";
 import { toast } from "sonner";
 import { api, ApiError, type Order } from "@/lib/api";
-import { money, when } from "@/lib/format";
+import { money, orderNo, when } from "@/lib/format";
 import { OrderStatusBadge } from "@/components/OrderStatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Check, X, PackageCheck } from "lucide-react";
 
 export default function CourierDashboard() {
+  const openOrder = useOpenOrderOnClick();
   const [orders, setOrders] = useState<Order[]>([]);
 
   const load = async () => {
@@ -40,11 +43,15 @@ export default function CourierDashboard() {
   const done = orders.filter((o) => ["completed", "verified"].includes(o.status));
 
   const OrderCard = ({ o, children }: { o: Order; children?: React.ReactNode }) => (
-    <Card>
+    <Card
+      className="cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/30"
+      onClick={openOrder(o.id)}
+    >
       <CardContent className="pt-6">
         <div className="mb-2 flex items-start justify-between gap-2">
           <div>
-            <p className="font-semibold">{o.itemCategory}</p>
+            <p className="font-mono text-xs font-semibold text-primary">{orderNo(o.orderNumber)}</p>
+            <OrderTitleLink id={o.id}>{o.itemCategory}</OrderTitleLink>
             <p className="text-sm text-muted-foreground">
               For {o.customerName} · {when(o.createdAt)}
             </p>
@@ -73,7 +80,7 @@ export default function CourierDashboard() {
             {money(o.price, o.currency)}
           </p>
         </div>
-        {children && <div className="mt-4 flex gap-2">{children}</div>}
+        {children && <div className="mt-4 flex flex-wrap gap-2">{children}</div>}
       </CardContent>
     </Card>
   );
@@ -122,8 +129,10 @@ export default function CourierDashboard() {
           <div className="space-y-3">
             {active.map((o) => (
               <OrderCard key={o.id} o={o}>
+                <DirectionsButton order={o} variant="default" />
                 <Button
                   size="sm"
+                  variant="outline"
                   onClick={() => act(() => api.completeOrder(o.id), "Marked as delivered")}
                 >
                   <PackageCheck className="h-4 w-4" /> Report delivered
@@ -142,7 +151,9 @@ export default function CourierDashboard() {
             {done.map((o) => (
               <OrderCard key={o.id} o={o}>
                 {o.status === "completed" && (
-                  <p className="text-sm text-muted-foreground">Waiting for customer verification…</p>
+                  <p className="text-sm text-muted-foreground">
+                    Waiting for customer verification…
+                  </p>
                 )}
               </OrderCard>
             ))}

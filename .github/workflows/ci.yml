@@ -35,3 +35,72 @@ jobs:
       - run: bun run build
       - run: bun run lint
         continue-on-error: true
+
+  # Full stack in the browser: Postgres + the Bun server serving the built
+  # site, driven by Playwright. Also runs the server's database integration
+  # tests (order-action race guards) against the same throwaway Postgres.
+  # Nominatim/OSRM aren't started: these tests don't price routes.
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: carefulto_e2e
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ci -d carefulto_e2e"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://ci:ci@localhost:5432/carefulto_e2e
+      PORT: 3001
+      NODE_ENV: production
+      ADMIN_EMAIL: admin@e2e.test
+      ADMIN_PASSWORD: e2e-admin-password
+      E2E_ADMIN_EMAIL: admin@e2e.test
+      E2E_ADMIN_PASSWORD: e2e-admin-password
+      # Unreachable on purpose: geo lookups fail fast instead of hanging.
+      NOMINATIM_URL: http://127.0.0.1:9
+      OSRM_URL: http://127.0.0.1:9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+        working-directory: server
+      - run: bun install --frozen-lockfile
+        working-directory: web
+      - run: bun run build
+        working-directory: web
+      - name: Start server
+        working-directory: server
+        run: |
+          STATIC_DIR="$GITHUB_WORKSPACE/web/dist" bun run src/index.ts > "$RUNNER_TEMP/server.log" 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:3001/ > /dev/null && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/server.log"
+          exit 1
+      - name: Database integration tests
+        working-directory: server
+        run: INTEGRATION_DB=1 bun test integration
+      - run: bunx playwright install --with-deps chromium
+        working-directory: web
+      - name: Playwright
+        working-directory: web
+        run: bun run test:e2e
+        env:
+          BASE_URL: http://localhost:3001
+      - name: Server log
+        if: failure()
+        run: cat "$RUNNER_TEMP/server.log"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report
+            web/test-results
+          retention-days: 7

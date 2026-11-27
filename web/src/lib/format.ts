@@ -1,5 +1,10 @@
 import type { OrderStatus } from "./api";
 
+// 1001 -> "CT-1001": the reference customers and admins quote.
+export function orderNo(n: number): string {
+  return `CT-${n}`;
+}
+
 export function money(amount: number, currency: string): string {
   return new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(amount);
 }

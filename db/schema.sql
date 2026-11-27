@@ -124,3 +124,40 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_region_id TEXT REFERENCES reg
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_region_checked_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_orders_pickup_region ON orders(pickup_region_id);
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
+
+-- ---------------------------------------------------------------------------
+-- Order numbers: short, human-friendly references (shown as CT-1001) that
+-- customers and admins can quote for cancellations and refunds. New orders
+-- take the next number from the sequence; orders that predate this column
+-- are backfilled oldest-first, continuing after the highest number in use.
+-- Every statement is idempotent, so this is safe on every boot.
+-- ---------------------------------------------------------------------------
+CREATE SEQUENCE IF NOT EXISTS order_number_seq START 1001;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_number INTEGER;
+
+WITH base AS (SELECT COALESCE(MAX(order_number), 1000) AS n FROM orders),
+     todo AS (
+       SELECT id, row_number() OVER (ORDER BY created_at, id) AS rn
+       FROM orders WHERE order_number IS NULL
+     )
+UPDATE orders o SET order_number = base.n + todo.rn
+FROM todo, base WHERE o.id = todo.id;
+
+-- Keep the sequence ahead of every number already handed out.
+SELECT setval('order_number_seq', GREATEST((SELECT MAX(order_number) FROM orders), 1000));
+
+ALTER TABLE orders ALTER COLUMN order_number SET DEFAULT nextval('order_number_seq');
+ALTER TABLE orders ALTER COLUMN order_number SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_number ON orders(order_number);
+
+-- ---------------------------------------------------------------------------
+-- Cancellation. A cancelled order keeps all its data; these record who
+-- cancelled it, when and why. refund_status tracks the money side:
+--   NULL      nothing to refund
+--   'pending' a refund is owed (set on cancel) — paying it out is future work
+--   'refunded' reserved for the refund feature
+-- ---------------------------------------------------------------------------
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancelled_at  TIMESTAMPTZ;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancelled_by  UUID REFERENCES users(id);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancel_reason TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS refund_status TEXT;

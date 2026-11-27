@@ -22,12 +22,17 @@ export type OrderStatus =
 
 export interface Order {
   id: string;
+  orderNumber: number;
   status: OrderStatus;
   itemCategory: string;
   itemDescription: string | null;
   notes: string | null;
   pickupAddress: string;
   dropoffAddress: string;
+  pickupLat: number | null;
+  pickupLng: number | null;
+  dropoffLat: number | null;
+  dropoffLng: number | null;
   distanceKm: number;
   distanceSource: string;
   price: number;
@@ -40,6 +45,43 @@ export interface Order {
   courierVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  cancelledAt: string | null;
+  cancelledByName: string | null;
+  cancelReason: string | null;
+  refundStatus: "pending" | "refunded" | null;
+}
+
+export interface AccountDetails {
+  user: AdminUser;
+  customer?: {
+    orders: number;
+    open: number;
+    delivered: number;
+    cancelled: number;
+    spent: number;
+    lastOrderAt: string | null;
+    currency: string;
+  };
+  courier?: {
+    delivered: number;
+    deliveredThisMonth: number;
+    inProgress: number;
+    awaitingReply: number;
+    rejected: number;
+    cancelledWhileAssigned: number;
+    earningsThisMonth: number;
+    earningsAllTime: number;
+    currency: string;
+  };
+  recentOrders: Order[];
+}
+
+export interface OrderPage {
+  orders: Order[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pageCount: number;
 }
 
 export interface Notification {
@@ -234,6 +276,18 @@ export const api = {
   verifyOrder: (id: string) => request<{ order: Order }>("POST", `/orders/${id}/verify`),
   acceptOrder: (id: string) => request<{ order: Order }>("POST", `/orders/${id}/accept`),
   rejectOrder: (id: string) => request<{ order: Order }>("POST", `/orders/${id}/reject`),
+  cancelOrder: (id: string, reason?: string) =>
+    request<{ order: Order }>("POST", `/orders/${id}/cancel`, { reason }),
+  searchOrders: (params: { q?: string; from?: string; to?: string; page?: number }) => {
+    const qs = new URLSearchParams();
+    if (params.q?.trim()) qs.set("q", params.q.trim());
+    if (params.from) qs.set("from", params.from);
+    if (params.to) qs.set("to", params.to);
+    if (params.page && params.page > 1) qs.set("page", String(params.page));
+    const s = qs.toString();
+    return request<OrderPage>("GET", `/admin/orders${s ? `?${s}` : ""}`);
+  },
+  getAccount: (id: string) => request<AccountDetails>("GET", `/admin/users/${id}`),
   recommendOrder: (id: string, courierId: string) =>
     request<{ order: Order }>("POST", `/orders/${id}/recommend`, { courierId }),
 

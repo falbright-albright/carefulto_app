@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Check, PackageCheck, X } from "lucide-react";
+import { ArrowLeft, Ban, Check, PackageCheck, X } from "lucide-react";
+import { DirectionsButton } from "@/components/DirectionsButton";
 import { api, ApiError, type Order } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { money, when } from "@/lib/format";
+import { money, orderNo, when } from "@/lib/format";
+import { CancelOrderDialog, canCancel } from "@/components/OrderAdminMenu";
 import { OrderStatusBadge } from "@/components/OrderStatusBadge";
 import { RecommendDialog, type Courier } from "@/components/RecommendDialog";
 import { Button } from "@/components/ui/button";
@@ -71,12 +73,14 @@ export default function OrderPage() {
   return (
     <div className="mx-auto max-w-3xl">
       <Button asChild variant="ghost" size="sm" className="-ml-3 mb-4">
-        <Link to="/">
+        <Link to="/app">
           <ArrowLeft className="h-4 w-4" /> Back to dashboard
         </Link>
       </Button>
 
-      {state.kind === "loading" && <p className="py-12 text-center text-muted-foreground">Loading order…</p>}
+      {state.kind === "loading" && (
+        <p className="py-12 text-center text-muted-foreground">Loading order…</p>
+      )}
       {state.kind === "not_found" && (
         <Message title="Order not found" body="This order doesn't exist or has been removed." />
       )}
@@ -94,6 +98,19 @@ export default function OrderPage() {
       {state.kind === "ok" && (
         <OrderDetails
           order={state.order}
+          directions={
+            user?.role === "courier" &&
+            state.order.courierId === user.id &&
+            (state.order.status === "recommended" || state.order.status === "accepted") ? (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Ready to go? Get directions from where you are to the pickup, then to the
+                  drop-off.
+                </p>
+                <DirectionsButton order={state.order} size="default" variant="default" />
+              </div>
+            ) : undefined
+          }
           actions={
             <OrderActions
               order={state.order}
@@ -130,19 +147,29 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-function OrderDetails({ order: o, actions }: { order: Order; actions: React.ReactNode }) {
+function OrderDetails({
+  order: o,
+  actions,
+  directions,
+}: {
+  order: Order;
+  actions: React.ReactNode;
+  directions?: React.ReactNode;
+}) {
   return (
     <Card>
       <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
         <div>
-          <CardTitle className="text-2xl">{o.itemCategory}</CardTitle>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Placed {when(o.createdAt)} · Order {o.id.slice(0, 8)}
+          <p className="font-mono text-sm font-semibold text-primary">
+            Order {orderNo(o.orderNumber)}
           </p>
+          <CardTitle className="text-2xl">{o.itemCategory}</CardTitle>
+          <p className="mt-1 text-sm text-muted-foreground">Placed {when(o.createdAt)}</p>
         </div>
         <OrderStatusBadge status={o.status} />
       </CardHeader>
       <CardContent>
+        {directions && <div className="mb-4 rounded-lg border bg-muted/40 p-4">{directions}</div>}
         <dl className="divide-y">
           {o.itemDescription && <Row label="Item description">{o.itemDescription}</Row>}
           <Row label="Pickup address">{o.pickupAddress}</Row>
@@ -162,6 +189,24 @@ function OrderDetails({ order: o, actions }: { order: Order; actions: React.Reac
             Courier {o.courierVerifiedAt ? `✓ ${when(o.courierVerifiedAt)}` : "—"} · Customer{" "}
             {o.customerVerifiedAt ? `✓ ${when(o.customerVerifiedAt)}` : "—"}
           </Row>
+          {o.status === "cancelled" && (
+            <Row label="Cancelled">
+              {o.cancelledAt ? when(o.cancelledAt) : "—"}
+              {o.cancelledByName ? ` by ${o.cancelledByName}` : ""}
+              {o.cancelReason && (
+                <span className="mt-1 block text-muted-foreground">Reason: {o.cancelReason}</span>
+              )}
+            </Row>
+          )}
+          {o.refundStatus && (
+            <Row label="Refund">
+              {o.refundStatus === "pending" ? (
+                <span className="text-amber-600">Pending — will be processed by CarefulTO</span>
+              ) : (
+                "Refunded"
+              )}
+            </Row>
+          )}
           <Row label="Last updated">{when(o.updatedAt)}</Row>
         </dl>
         {actions}
@@ -188,11 +233,14 @@ function OrderActions({
 }) {
   let content: React.ReactNode = null;
 
-  if (role === "admin" && (o.status === "placed" || o.status === "rejected")) {
+  if (role === "admin" && canCancel(o)) {
     content = (
       <>
-        <RecommendDialog order={o} couriers={couriers} onDone={reload} />
-        {couriers.length === 0 && (
+        {(o.status === "placed" || o.status === "rejected") && (
+          <RecommendDialog order={o} couriers={couriers} onDone={reload} />
+        )}
+        <AdminCancelButton order={o} onDone={reload} />
+        {couriers.length === 0 && (o.status === "placed" || o.status === "rejected") && (
           <p className="text-sm text-amber-600">No couriers exist yet — create one first.</p>
         )}
       </>
@@ -215,25 +263,52 @@ function OrderActions({
       );
     } else if (o.status === "accepted") {
       content = (
-        <Button size="sm" onClick={() => act(() => api.completeOrder(o.id), "Marked as delivered")}>
-          <PackageCheck className="h-4 w-4" /> Report delivered
-        </Button>
+        <>
+          <Button
+            size="sm"
+            onClick={() => act(() => api.completeOrder(o.id), "Marked as delivered")}
+          >
+            <PackageCheck className="h-4 w-4" /> Report delivered
+          </Button>
+        </>
       );
     } else if (o.status === "completed") {
       content = <p className="text-sm text-muted-foreground">Waiting for customer verification…</p>;
     }
   } else if (role === "customer" && o.status === "completed") {
     content = (
-      <Button size="sm" onClick={() => act(() => api.verifyOrder(o.id), "Delivery verified. Thank you!")}>
+      <Button
+        size="sm"
+        onClick={() => act(() => api.verifyOrder(o.id), "Delivery verified. Thank you!")}
+      >
         Verify delivery completed
       </Button>
     );
   }
 
   if (o.status === "verified") {
-    content = <p className="text-sm font-medium text-emerald-600">✓ Delivery confirmed complete.</p>;
+    content = (
+      <p className="text-sm font-medium text-emerald-600">✓ Delivery confirmed complete.</p>
+    );
   }
 
   if (!content) return null;
   return <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-4">{content}</div>;
+}
+
+function AdminCancelButton({ order, onDone }: { order: Order; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        className="text-destructive"
+        onClick={() => setOpen(true)}
+      >
+        <Ban className="h-4 w-4" /> Cancel order
+      </Button>
+      <CancelOrderDialog order={order} open={open} onOpenChange={setOpen} onDone={onDone} />
+    </>
+  );
 }

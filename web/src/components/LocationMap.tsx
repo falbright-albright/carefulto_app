@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
-import L, { type LatLngBoundsExpression, type LatLngTuple } from "leaflet";
+import L, { type LatLngBoundsExpression } from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 // Ontario bounding box (matches ONTARIO_VIEWBOX on the server): the business
@@ -9,7 +9,13 @@ const ONTARIO_BOUNDS: LatLngBoundsExpression = [
   [41.6, -95.2],
   [56.9, -74.3],
 ];
-const ONTARIO_CENTER: LatLngTuple = [44.5, -79.5]; // southern Ontario, where most addresses are
+// Where the map starts (and returns when both addresses are cleared): the
+// service area — Toronto and the GTA down to St. Catharines and Niagara
+// Falls across the lake. Customers can still zoom out to all of Ontario.
+const SERVICE_AREA: LatLngBoundsExpression = [
+  [43.05, -79.7], // south-west: Niagara Falls / St. Catharines, Mississauga
+  [43.86, -79.1], // north-east: north Toronto / Markham, Pickering
+];
 
 function pin(color: string) {
   return L.divIcon({
@@ -51,26 +57,46 @@ function FitToView({
 }) {
   const map = useMap();
   useEffect(() => {
+    // No animation here: Leaflet drops a new zoom request while a zoom
+    // animation is still running, so quick changes (e.g. clearing both
+    // addresses) could leave the map on a stale view.
     // A real driving route can bow out well beyond the straight line between
     // the two pins (detours, one-ways, etc.) — frame the whole path when we
     // have one instead of just the two points.
     if (route && route.length > 0) {
-      map.fitBounds(route, { padding: [32, 32], maxZoom: 14 });
+      map.fitBounds(route, { padding: [32, 32], maxZoom: 14, animate: false });
     } else if (pickup && dropoff) {
       map.fitBounds(
         [
           [pickup.lat, pickup.lng],
           [dropoff.lat, dropoff.lng],
         ],
-        { padding: [32, 32], maxZoom: 14 },
+        { padding: [32, 32], maxZoom: 14, animate: false },
       );
     } else if (pickup) {
-      map.setView([pickup.lat, pickup.lng], 13);
+      map.setView([pickup.lat, pickup.lng], 13, { animate: false });
     } else if (dropoff) {
-      map.setView([dropoff.lat, dropoff.lng], 13);
+      map.setView([dropoff.lat, dropoff.lng], 13, { animate: false });
+    } else {
+      // Both addresses cleared: back to the service-area view.
+      map.fitBounds(SERVICE_AREA, { animate: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pickup?.lat, pickup?.lng, dropoff?.lat, dropoff?.lng, route]);
+  return null;
+}
+
+// Leaflet measures its box once; when the box later changes size (layout
+// settling, window resize, phone/desktop switch) tell it to re-measure, or
+// it leaves grey, unloaded areas.
+function KeepSized() {
+  const map = useMap();
+  useEffect(() => {
+    const el = map.getContainer();
+    const ro = new ResizeObserver(() => map.invalidateSize());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [map]);
   return null;
 }
 
@@ -85,8 +111,10 @@ export function LocationMap({ pickup, dropoff, route, className }: LocationMapPr
     // dropdown directly above it, hiding the suggestions.
     <div className={`isolate ${className ?? ""}`}>
       <MapContainer
-        center={ONTARIO_CENTER}
-        zoom={6}
+        bounds={SERVICE_AREA}
+        // Quarter-step zoom so the short map box fits the service area
+        // snugly instead of rounding out a whole level.
+        zoomSnap={0.25}
         minZoom={5}
         maxBounds={ONTARIO_BOUNDS}
         maxBoundsViscosity={1.0}
@@ -111,6 +139,7 @@ export function LocationMap({ pickup, dropoff, route, className }: LocationMapPr
           </Marker>
         )}
         <FitToView pickup={pickup} dropoff={dropoff} route={route} />
+        <KeepSized />
       </MapContainer>
     </div>
   );

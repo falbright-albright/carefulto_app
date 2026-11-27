@@ -1,20 +1,15 @@
 import { useEffect, useState } from "react";
+import { OrderTitleLink, useOpenOrderOnClick } from "@/components/OrderLink";
 import { toast } from "sonner";
 import { api, ApiError, type AddressSuggestion, type Order, type Quote } from "@/lib/api";
-import { money, when } from "@/lib/format";
+import { money, orderNo, when } from "@/lib/format";
 import { OrderStatusBadge } from "@/components/OrderStatusBadge";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { LocationMap } from "@/components/LocationMap";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -27,16 +22,12 @@ import { MapPin, Truck } from "lucide-react";
 
 // Shown as the grey placeholder in the delivery-notes field.
 const NOTES_PLACEHOLDER =
-  "Please share any additional details that will help us complete your delivery. " +
-  "If your exact pickup or drop-off location did not appear in our address suggestions, " +
-  "select the nearest available address above and describe the precise location here — " +
-  "for example, the building name, unit or suite number, entrance, loading dock, or a nearby landmark. " +
-  "Our address and pricing tools currently rely on free mapping data that does not yet include every address, " +
-  "and we apologize for any inconvenience this may cause. " +
-  "Please include as much information as you can: the more detail you provide, " +
-  "the better our courier can pick up and deliver your item exactly where you need it.";
+  "Tell your courier exactly where to pick up and drop off: building name, unit, " +
+  "entrance, buzzer code or a nearby landmark. If your address wasn't in the " +
+  "suggestions, pick the closest one and describe the real location here.";
 
 export default function CustomerDashboard() {
+  const openOrder = useOpenOrderOnClick();
   const [categories, setCategories] = useState<string[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [tab, setTab] = useState("place");
@@ -63,7 +54,10 @@ export default function CustomerDashboard() {
   };
 
   useEffect(() => {
-    api.categories().then((r) => setCategories(r.categories)).catch(() => {});
+    api
+      .categories()
+      .then((r) => setCategories(r.categories))
+      .catch(() => {});
     loadOrders();
     const t = setInterval(loadOrders, 15000);
     return () => clearInterval(t);
@@ -177,56 +171,61 @@ export default function CustomerDashboard() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="pickup">Pickup address</Label>
-                <AddressAutocomplete
-                  id="pickup"
-                  placeholder="123 King St W, Toronto, ON"
-                  value={pickup}
-                  onChange={(text) => {
-                    setPickup(text);
-                    setPickupPoint(null);
-                    resetQuote();
-                  }}
-                  onSelect={(s) => {
-                    setPickup(s.label);
-                    setPickupPoint(s);
-                    resetQuote();
-                  }}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="dropoff">Delivery address</Label>
-                <AddressAutocomplete
-                  id="dropoff"
-                  placeholder="456 Queen St E, Toronto, ON"
-                  value={dropoff}
-                  onChange={(text) => {
-                    setDropoff(text);
-                    setDropoffPoint(null);
-                    resetQuote();
-                  }}
-                  onSelect={(s) => {
-                    setDropoff(s.label);
-                    setDropoffPoint(s);
-                    resetQuote();
-                  }}
-                />
-              </div>
-
-              {(pickupPoint || dropoffPoint) && (
+              {/* Addresses on the left, map on the right (stacked on phones).
+                  The map is always shown: Ontario at first, then a pin per
+                  chosen address, then the route once the price is calculated.
+                  It stretches to the height of the two address fields. */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="pickup">Pickup address</Label>
+                    <AddressAutocomplete
+                      id="pickup"
+                      placeholder="123 King St W, Toronto, ON"
+                      value={pickup}
+                      onChange={(text) => {
+                        setPickup(text);
+                        setPickupPoint(null);
+                        resetQuote();
+                      }}
+                      onSelect={(s) => {
+                        setPickup(s.label);
+                        setPickupPoint(s);
+                        resetQuote();
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="dropoff">Delivery address</Label>
+                    <AddressAutocomplete
+                      id="dropoff"
+                      placeholder="456 Queen St E, Toronto, ON"
+                      value={dropoff}
+                      onChange={(text) => {
+                        setDropoff(text);
+                        setDropoffPoint(null);
+                        resetQuote();
+                      }}
+                      onSelect={(s) => {
+                        setDropoff(s.label);
+                        setDropoffPoint(s);
+                        resetQuote();
+                      }}
+                    />
+                  </div>
+                </div>
                 <LocationMap
-                  className="h-56 overflow-hidden rounded-md border"
+                  className="h-56 overflow-hidden rounded-md border sm:h-auto"
                   pickup={pickupPoint ?? undefined}
                   dropoff={dropoffPoint ?? undefined}
                   route={quote?.geometry}
                 />
-              )}
+              </div>
 
               {(!pickupPoint || !dropoffPoint) && (
                 <p className="text-xs text-muted-foreground">
-                  Select an address from the suggestions for both fields to calculate a price and route.
+                  Select an address from the suggestions for both fields to calculate a price and
+                  route.
                 </p>
               )}
 
@@ -234,7 +233,9 @@ export default function CustomerDashboard() {
                 <Label htmlFor="notes">Delivery notes (optional)</Label>
                 <Textarea
                   id="notes"
-                  rows={7}
+                  rows={3}
+                  // The hint wraps to ~7 lines on a phone but 3 on desktop.
+                  className="min-h-[10rem] sm:min-h-0"
                   maxLength={2000}
                   placeholder={NOTES_PLACEHOLDER}
                   value={notes}
@@ -259,7 +260,9 @@ export default function CustomerDashboard() {
                       {money(quote.price, quote.currency)}
                     </span>
                     <span className="mx-2 text-muted-foreground">·</span>
-                    <span className="text-muted-foreground">~{Math.round(quote.durationMin)} min drive</span>
+                    <span className="text-muted-foreground">
+                      ~{Math.round(quote.durationMin)} min drive
+                    </span>
                   </div>
                 )}
               </div>
@@ -278,11 +281,18 @@ export default function CustomerDashboard() {
           ) : (
             <div className="space-y-3">
               {orders.map((o) => (
-                <Card key={o.id}>
+                <Card
+                  key={o.id}
+                  className="cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/30"
+                  onClick={openOrder(o.id)}
+                >
                   <CardContent className="pt-6">
                     <div className="mb-2 flex items-start justify-between gap-2">
                       <div>
-                        <p className="font-semibold">{o.itemCategory}</p>
+                        <p className="font-mono text-xs font-semibold text-primary">
+                          {orderNo(o.orderNumber)}
+                        </p>
+                        <OrderTitleLink id={o.id}>{o.itemCategory}</OrderTitleLink>
                         <p className="text-sm text-muted-foreground">{when(o.createdAt)}</p>
                       </div>
                       <OrderStatusBadge status={o.status} />

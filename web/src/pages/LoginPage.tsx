@@ -1,80 +1,192 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
-import { ApiError } from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package } from "lucide-react";
+import { ApiError, type Role } from "@/lib/api";
+import { AuthShell } from "@/site/AuthShell";
+import { usePageMeta } from "@/site/SiteLayout";
+import { ROLE_DOORS } from "@/site/SiteNav";
+
+// What each kind of account does on the platform, shown beside the form.
+const ROLE_COPY: Record<Role, { lead: string; accent: string; body: string; points: string[] }> = {
+  customer: {
+    lead: "Your deliveries,",
+    accent: "in one place.",
+    body: "Book a pickup, see your price before you confirm, and follow every delivery to the door.",
+    points: [
+      "Price shown before you book",
+      "Track each delivery's status",
+      "Confirm when it arrives",
+    ],
+  },
+  courier: {
+    lead: "Today's deliveries,",
+    accent: "ready to go.",
+    body: "See the deliveries recommended to you, accept the ones you can take, and report each one delivered.",
+    points: [
+      "New jobs as soon as they're assigned",
+      "Pickup, drop-off and delivery notes",
+      "Report delivered in one tap",
+    ],
+  },
+  admin: {
+    lead: "Run the business",
+    accent: "at a glance.",
+    body: "Assign orders to couriers, manage accounts and see how CarefulTO is doing month by month.",
+    points: [
+      "Recommend orders to couriers",
+      "Create courier and admin accounts",
+      "Analytics by region and category",
+    ],
+  },
+};
+
+// What to tell the person when sign-in fails. Wrong email/password (401)
+// always reads the same, whichever login door (customer/courier/admin) was used.
+export function loginErrorMessage(e: unknown): string {
+  if (e instanceof ApiError) {
+    if (e.status === 401) return "Incorrect email or password. Please try again.";
+    if (e.status === 403) return "This account has been suspended. Contact info@carefulto.ca.";
+    return e.message;
+  }
+  return "Sign in failed. Check your connection and try again.";
+}
+
+function asRole(v: string | null): Role {
+  return v === "courier" || v === "admin" ? v : "customer";
+}
 
 export default function LoginPage() {
   const { login } = useAuth();
+  const navigate = useNavigate();
+  usePageMeta(
+    "Sign in — CarefulTO",
+    "Sign in to your CarefulTO customer, courier or admin account.",
+  );
+  const [params] = useSearchParams();
+  const role = asRole(params.get("as"));
+  const copy = ROLE_COPY[role];
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const fail = (message: string) => {
+    setErr(message);
+    toast.error(message);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErr(null);
+    if (!email.trim() || !password) {
+      fail("Enter your email address and password.");
+      return;
+    }
     setBusy(true);
     try {
-      await login(email, password);
-      toast.success("Welcome back!");
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Login failed");
+      // The account's own role decides the dashboard, whichever door was used.
+      const user = await login(email, password);
+      toast.success(
+        user.role === role
+          ? `Welcome back, ${user.name.split(" ")[0]}`
+          : `Signed in to your ${user.role} account`,
+      );
+      navigate("/app", { replace: true });
+    } catch (e) {
+      fail(loginErrorMessage(e));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="mx-auto flex max-w-md flex-col items-center">
-      <div className="mb-6 flex items-center gap-2">
-        <Package className="h-8 w-8 text-primary" />
-        <span className="text-2xl font-bold">Careful2</span>
-      </div>
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle>Log in</CardTitle>
-          <CardDescription>Access your Careful2 deliveries.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={submit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={busy}>
-              {busy ? "Logging in…" : "Log in"}
-            </Button>
-          </form>
-          <p className="mt-4 text-center text-sm text-muted-foreground">
-            New customer?{" "}
-            <Link to="/register" className="font-medium text-primary hover:underline">
-              Create an account
-            </Link>
+    <AuthShell
+      aside={
+        <>
+          <span className="badge">{ROLE_DOORS.find((d) => d.role === role)?.label} sign in</span>
+          <h1>
+            {copy.lead}
+            <br />
+            <span>{copy.accent}</span>
+          </h1>
+          <p>{copy.body}</p>
+          <ul className="auth-points">
+            {copy.points.map((p) => (
+              <li key={p}>
+                <span className="check">&#10003;</span> {p}
+              </li>
+            ))}
+          </ul>
+        </>
+      }
+    >
+      <h2>Sign in</h2>
+      <p className="auth-sub">Use the email and password for your CarefulTO account.</p>
+
+      <nav className="role-switch" aria-label="I am signing in as">
+        {ROLE_DOORS.map(({ role: r, label, Icon }) => (
+          <Link
+            key={r}
+            to={`/login?as=${r}`}
+            replace
+            aria-current={r === role ? "page" : undefined}
+          >
+            <Icon aria-hidden />
+            {label}
+          </Link>
+        ))}
+      </nav>
+
+      {/* noValidate: the browser's own "include an @" bubble blocked the
+          request (so "admin" never reached the server) and looked like a
+          password-manager popup. Every attempt now gets the app's error. */}
+      <form onSubmit={submit} className="auth-form" noValidate>
+        {err && (
+          <p className="auth-error" role="alert">
+            {err}
           </p>
-        </CardContent>
-      </Card>
-    </div>
+        )}
+        <div className="form-group">
+          <label htmlFor="email">Email address</label>
+          <input
+            id="email"
+            type="email"
+            autoComplete="email"
+            placeholder="jane@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
+        <button type="submit" className="btn-submit" disabled={busy}>
+          {busy ? "Signing in…" : "Sign in"}
+        </button>
+      </form>
+
+      <p className="auth-alt">
+        {role === "customer" ? (
+          <>
+            New to CarefulTO? <Link to="/register">Create a customer account</Link>
+          </>
+        ) : (
+          <>
+            {role === "courier" ? "Courier" : "Admin"} accounts are created by a CarefulTO
+            administrator. Need help? <a href="mailto:info@carefulto.ca">info@carefulto.ca</a>
+          </>
+        )}
+      </p>
+    </AuthShell>
   );
 }

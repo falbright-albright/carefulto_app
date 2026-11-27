@@ -53,7 +53,10 @@ const routes: Route[] = [
 
   // --- admin ---
   { method: "POST", pattern: "/api/orders/:id/recommend", access: ["admin"], handler: adminR.recommend },
+  { method: "POST", pattern: "/api/orders/:id/cancel", access: ["admin"], handler: adminR.cancelOrder },
+  { method: "GET", pattern: "/api/admin/orders", access: ["admin"], handler: adminR.searchOrdersRoute },
   { method: "GET", pattern: "/api/admin/users", access: ["admin"], handler: adminR.listUsers },
+  { method: "GET", pattern: "/api/admin/users/:id", access: ["admin"], handler: adminR.getUser },
   { method: "GET", pattern: "/api/admin/couriers", access: ["admin"], handler: adminR.listCouriers },
   { method: "POST", pattern: "/api/admin/users", access: ["admin"], handler: adminR.createUser },
   { method: "POST", pattern: "/api/admin/users/:id/ban", access: ["admin"], handler: adminR.banUser },
