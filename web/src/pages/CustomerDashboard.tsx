@@ -171,52 +171,56 @@ export default function CustomerDashboard() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="pickup">Pickup address</Label>
-                <AddressAutocomplete
-                  id="pickup"
-                  placeholder="123 King St W, Toronto, ON"
-                  value={pickup}
-                  onChange={(text) => {
-                    setPickup(text);
-                    setPickupPoint(null);
-                    resetQuote();
-                  }}
-                  onSelect={(s) => {
-                    setPickup(s.label);
-                    setPickupPoint(s);
-                    resetQuote();
-                  }}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="dropoff">Delivery address</Label>
-                <AddressAutocomplete
-                  id="dropoff"
-                  placeholder="456 Queen St E, Toronto, ON"
-                  value={dropoff}
-                  onChange={(text) => {
-                    setDropoff(text);
-                    setDropoffPoint(null);
-                    resetQuote();
-                  }}
-                  onSelect={(s) => {
-                    setDropoff(s.label);
-                    setDropoffPoint(s);
-                    resetQuote();
-                  }}
-                />
-              </div>
-
-              {(pickupPoint || dropoffPoint) && (
+              {/* Addresses on the left, map on the right (stacked on phones).
+                  The map is always shown: Ontario at first, then a pin per
+                  chosen address, then the route once the price is calculated.
+                  It stretches to the height of the two address fields. */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="pickup">Pickup address</Label>
+                    <AddressAutocomplete
+                      id="pickup"
+                      placeholder="123 King St W, Toronto, ON"
+                      value={pickup}
+                      onChange={(text) => {
+                        setPickup(text);
+                        setPickupPoint(null);
+                        resetQuote();
+                      }}
+                      onSelect={(s) => {
+                        setPickup(s.label);
+                        setPickupPoint(s);
+                        resetQuote();
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="dropoff">Delivery address</Label>
+                    <AddressAutocomplete
+                      id="dropoff"
+                      placeholder="456 Queen St E, Toronto, ON"
+                      value={dropoff}
+                      onChange={(text) => {
+                        setDropoff(text);
+                        setDropoffPoint(null);
+                        resetQuote();
+                      }}
+                      onSelect={(s) => {
+                        setDropoff(s.label);
+                        setDropoffPoint(s);
+                        resetQuote();
+                      }}
+                    />
+                  </div>
+                </div>
                 <LocationMap
-                  className="h-56 overflow-hidden rounded-md border"
+                  className="h-56 overflow-hidden rounded-md border sm:h-auto"
                   pickup={pickupPoint ?? undefined}
                   dropoff={dropoffPoint ?? undefined}
                   route={quote?.geometry}
                 />
-              )}
+              </div>
 
               {(!pickupPoint || !dropoffPoint) && (
                 <p className="text-xs text-muted-foreground">

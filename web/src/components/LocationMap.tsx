@@ -10,6 +10,7 @@ const ONTARIO_BOUNDS: LatLngBoundsExpression = [
   [56.9, -74.3],
 ];
 const ONTARIO_CENTER: LatLngTuple = [44.5, -79.5]; // southern Ontario, where most addresses are
+const ONTARIO_ZOOM = 6;
 
 function pin(color: string) {
   return L.divIcon({
@@ -68,9 +69,26 @@ function FitToView({
       map.setView([pickup.lat, pickup.lng], 13);
     } else if (dropoff) {
       map.setView([dropoff.lat, dropoff.lng], 13);
+    } else {
+      // Both addresses cleared: back to the whole-Ontario view.
+      map.setView(ONTARIO_CENTER, ONTARIO_ZOOM);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pickup?.lat, pickup?.lng, dropoff?.lat, dropoff?.lng, route]);
+  return null;
+}
+
+// Leaflet measures its box once; when the box later changes size (layout
+// settling, window resize, phone/desktop switch) tell it to re-measure, or
+// it leaves grey, unloaded areas.
+function KeepSized() {
+  const map = useMap();
+  useEffect(() => {
+    const el = map.getContainer();
+    const ro = new ResizeObserver(() => map.invalidateSize());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [map]);
   return null;
 }
 
@@ -86,7 +104,7 @@ export function LocationMap({ pickup, dropoff, route, className }: LocationMapPr
     <div className={`isolate ${className ?? ""}`}>
       <MapContainer
         center={ONTARIO_CENTER}
-        zoom={6}
+        zoom={ONTARIO_ZOOM}
         minZoom={5}
         maxBounds={ONTARIO_BOUNDS}
         maxBoundsViscosity={1.0}
@@ -111,6 +129,7 @@ export function LocationMap({ pickup, dropoff, route, className }: LocationMapPr
           </Marker>
         )}
         <FitToView pickup={pickup} dropoff={dropoff} route={route} />
+        <KeepSized />
       </MapContainer>
     </div>
   );
