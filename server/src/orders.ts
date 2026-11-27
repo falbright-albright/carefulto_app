@@ -109,9 +109,10 @@ export interface OrderPage {
 }
 
 // Admin order search: every term must appear in the order's searchable
-// text (see OrderSearch), optionally limited to one month, newest first,
+// text (see OrderSearch), optionally limited to a placed-date range
+// (inclusive), newest first,
 // ORDER_PAGE_SIZE per page.
-export async function searchOrders({ terms, month, page }: OrderSearch): Promise<OrderPage> {
+export async function searchOrders({ terms, from, to, page }: OrderSearch): Promise<OrderPage> {
   const tz = config.analyticsTimeZone;
   const where = sql`
     WHERE NOT EXISTS (
@@ -123,7 +124,8 @@ export async function searchOrders({ terms, month, page }: OrderSearch): Promise
         to_char(o.created_at AT TIME ZONE ${tz}, 'YYYY-MM-DD FMMonth FMMon FMDD')
       ) NOT ILIKE '%' || t.term || '%'
     )
-    AND (${month}::text IS NULL OR to_char(o.created_at AT TIME ZONE ${tz}, 'YYYY-MM') = ${month})
+    AND (${from}::date IS NULL OR (o.created_at AT TIME ZONE ${tz})::date >= ${from}::date)
+    AND (${to}::date IS NULL OR (o.created_at AT TIME ZONE ${tz})::date <= ${to}::date)
   `;
   const [rows, counted] = await Promise.all([
     sql`

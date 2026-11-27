@@ -33,13 +33,15 @@ function verificationCell(o: Order) {
   return <span className="text-muted-foreground">—</span>;
 }
 
-// The admin Orders tab: search box + month filter above a paginated table
-// (50 per page, newest first). Searching hits the server, so it covers every
-// order in the database, not just the ones on screen.
+// The admin Orders tab: a placed-date range (From/To, both inclusive) and a
+// search box above a paginated table (50 per page, newest first). The date
+// range narrows the orders first; the search then refines within it. Both
+// run on the server, so they cover every order, not just the ones on screen.
 export default function AdminOrders({ couriers }: { couriers: Courier[] }) {
   const openOrder = useOpenOrderOnClick();
   const [q, setQ] = useState("");
-  const [month, setMonth] = useState("");
+  const [from, setFrom] = useState(""); // "YYYY-MM-DD" or ""
+  const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
   const [data, setData] = useState<OrderPage | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,46 +49,99 @@ export default function AdminOrders({ couriers }: { couriers: Courier[] }) {
   // Only the newest request may update the table (typing fires several).
   const requestId = useRef(0);
 
-  const load = useCallback(async (params: { q: string; month: string; page: number }) => {
-    const id = ++requestId.current;
-    setLoading(true);
-    try {
-      const result = await api.searchOrders(params);
-      if (id !== requestId.current) return;
-      setData(result);
-      setError(null);
-      // A cancel or filter change can leave us past the last page.
-      if (params.page > result.pageCount) setPage(result.pageCount);
-    } catch (err) {
-      if (id !== requestId.current) return;
-      setError(err instanceof ApiError ? err.message : "Could not load orders");
-    } finally {
-      if (id === requestId.current) setLoading(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (params: { q: string; from: string; to: string; page: number }) => {
+      const id = ++requestId.current;
+      // Catch a backwards range here, with no request and no stale table.
+      if (params.from && params.to && params.from > params.to) {
+        setData(null);
+        setError("The From date must be on or before the To date.");
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const result = await api.searchOrders(params);
+        if (id !== requestId.current) return;
+        setData(result);
+        setError(null);
+        // A cancel or filter change can leave us past the last page.
+        if (params.page > result.pageCount) setPage(result.pageCount);
+      } catch (err) {
+        if (id !== requestId.current) return;
+        // Clear the table so old results never look like the filtered ones.
+        setData(null);
+        setError(err instanceof ApiError ? err.message : "Could not load orders");
+      } finally {
+        if (id === requestId.current) setLoading(false);
+      }
+    },
+    [],
+  );
 
-  // Typing waits for a short pause; month and page changes load at once.
+  // Typing waits for a short pause; date and page changes load at once.
   const typed = useRef(false);
   useEffect(() => {
     const delay = typed.current ? SEARCH_DEBOUNCE_MS : 0;
     typed.current = false;
-    const t = setTimeout(() => load({ q, month, page }), delay);
+    const t = setTimeout(() => load({ q, from, to, page }), delay);
     return () => clearTimeout(t);
-  }, [q, month, page, load]);
+  }, [q, from, to, page, load]);
 
   // Keep the current view fresh, like the rest of the dashboard.
   useEffect(() => {
-    const t = setInterval(() => load({ q, month, page }), 15000);
+    const t = setInterval(() => load({ q, from, to, page }), 15000);
     return () => clearInterval(t);
-  }, [q, month, page, load]);
+  }, [q, from, to, page, load]);
 
-  const reload = () => load({ q, month, page });
-  const filtered = q.trim() !== "" || month !== "";
+  const reload = () => load({ q, from, to, page });
+  const filtered = q.trim() !== "" || from !== "" || to !== "";
   const first = data && data.total > 0 ? (data.page - 1) * data.pageSize + 1 : 0;
   const last = data ? Math.min(data.page * data.pageSize, data.total) : 0;
 
   return (
     <div className="space-y-3">
+      <fieldset className="space-y-1">
+        <legend className="text-sm font-medium">Date placed</legend>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="space-y-1">
+            <Label htmlFor="order-from" className="text-xs text-muted-foreground">
+              From
+            </Label>
+            <Input
+              id="order-from"
+              type="date"
+              className="sm:w-44"
+              value={from}
+              max={to || undefined}
+              onChange={(e) => {
+                setFrom(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="order-to" className="text-xs text-muted-foreground">
+              To
+            </Label>
+            <Input
+              id="order-to"
+              type="date"
+              className="sm:w-44"
+              value={to}
+              min={from || undefined}
+              onChange={(e) => {
+                setTo(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
+          <p className="pb-2 text-xs text-muted-foreground">
+            Both dates included. Leave one empty for an open-ended range.
+          </p>
+        </div>
+      </fieldset>
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="flex-1 space-y-1">
           <Label htmlFor="order-search">Search orders</Label>
@@ -106,25 +161,13 @@ export default function AdminOrders({ couriers }: { couriers: Courier[] }) {
             />
           </div>
         </div>
-        <div className="space-y-1">
-          <Label htmlFor="order-month">Month placed</Label>
-          <Input
-            id="order-month"
-            type="month"
-            className="sm:w-44"
-            value={month}
-            onChange={(e) => {
-              setMonth(e.target.value);
-              setPage(1);
-            }}
-          />
-        </div>
         {filtered && (
           <Button
             variant="ghost"
             onClick={() => {
               setQ("");
-              setMonth("");
+              setFrom("");
+              setTo("");
               setPage(1);
             }}
           >
@@ -133,9 +176,17 @@ export default function AdminOrders({ couriers }: { couriers: Courier[] }) {
         )}
       </div>
 
+      {error && (
+        <p
+          className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          role="alert"
+        >
+          {error}
+        </p>
+      )}
       <p className="text-sm text-muted-foreground" aria-live="polite">
         {error
-          ? error
+          ? null
           : !data
             ? "Loading orders…"
             : data.total === 0

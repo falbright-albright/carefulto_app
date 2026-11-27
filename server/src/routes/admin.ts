@@ -107,7 +107,7 @@ export async function recommend(req: Request, p: Record<string, string>, admin: 
   return json({ order: await getOrder(order.id) });
 }
 
-// GET /api/admin/orders?q=&month=YYYY-MM&page=N  — searchable, paginated
+// GET /api/admin/orders?q=&from=YYYY-MM-DD&to=YYYY-MM-DD&page=N  — searchable, paginated
 // order list for the admin Orders table (50 per page, newest first).
 export async function searchOrdersRoute(req: Request): Promise<Response> {
   const parsed = parseOrderSearch(new URL(req.url).searchParams);

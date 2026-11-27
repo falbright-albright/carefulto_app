@@ -12,7 +12,10 @@ export interface OrderSearch {
   // category, status, price (e.g. 32.30) and the placed date in the
   // business timezone (e.g. "2026-11-24 November Nov 24").
   terms: string[];
-  month: string | null; // "YYYY-MM": only orders placed in that month
+  // Placed-date range in the business timezone, both ends inclusive
+  // ("YYYY-MM-DD"). Either may be null for an open-ended range.
+  from: string | null;
+  to: string | null;
   page: number; // 1-based
 }
 
@@ -30,9 +33,19 @@ export function parseOrderSearch(params: URLSearchParams): OrderSearch | { error
     .slice(0, MAX_TERMS)
     .map((t) => escapeLike(t.slice(0, MAX_TERM_LENGTH)));
 
-  const rawMonth = params.get("month")?.trim() || null;
-  if (rawMonth !== null && !/^\d{4}-(0[1-9]|1[0-2])$/.test(rawMonth)) {
-    return { error: "month must look like 2026-11" };
+  const from = params.get("from")?.trim() || null;
+  const to = params.get("to")?.trim() || null;
+  for (const [name, value] of [
+    ["from", from],
+    ["to", to],
+  ] as const) {
+    if (value !== null && !isRealDate(value)) {
+      return { error: `${name} must be a date like 2026-11-01` };
+    }
+  }
+  // ISO dates compare correctly as strings.
+  if (from !== null && to !== null && from > to) {
+    return { error: "the From date must be on or before the To date" };
   }
 
   const rawPage = params.get("page");
@@ -41,7 +54,17 @@ export function parseOrderSearch(params: URLSearchParams): OrderSearch | { error
     return { error: "page must be a positive whole number" };
   }
 
-  return { terms, month: rawMonth, page };
+  return { terms, from, to, page };
+}
+
+// "2026-11-31" has the right shape but isn't a day; reject it rather than
+// letting Postgres fail with a 500.
+function isRealDate(s: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return false;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const date = new Date(Date.UTC(y, mo - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === mo - 1 && date.getUTCDate() === d;
 }
 
 // CT-1001

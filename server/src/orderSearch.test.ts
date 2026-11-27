@@ -5,7 +5,7 @@ const parse = (qs: string) => parseOrderSearch(new URLSearchParams(qs));
 
 describe("parseOrderSearch", () => {
   test("no params: every order, first page", () => {
-    expect(parse("")).toEqual({ terms: [], month: null, page: 1 });
+    expect(parse("")).toEqual({ terms: [], from: null, to: null, page: 1 });
   });
 
   test("splits words into terms that must all match", () => {
@@ -30,10 +30,31 @@ describe("parseOrderSearch", () => {
     expect("terms" in r && r.terms.length).toBe(8);
   });
 
-  test("month must be YYYY-MM", () => {
-    expect(parse("month=2026-11")).toMatchObject({ month: "2026-11" });
-    expect(parse("month=2026-13")).toHaveProperty("error");
-    expect(parse("month=November")).toHaveProperty("error");
+  test("date range: both ends optional, YYYY-MM-DD", () => {
+    expect(parse("from=2026-11-01&to=2027-02-01")).toMatchObject({
+      from: "2026-11-01",
+      to: "2027-02-01",
+    });
+    expect(parse("from=2026-11-01")).toMatchObject({ from: "2026-11-01", to: null });
+    expect(parse("to=2027-02-01")).toMatchObject({ from: null, to: "2027-02-01" });
+  });
+
+  test("a one-day range is allowed (from = to)", () => {
+    expect(parse("from=2026-11-24&to=2026-11-24")).toMatchObject({
+      from: "2026-11-24",
+      to: "2026-11-24",
+    });
+  });
+
+  test("rejects From after To", () => {
+    expect(parse("from=2027-02-01&to=2026-11-01")).toHaveProperty("error");
+  });
+
+  test("rejects badly formed or impossible dates", () => {
+    for (const bad of ["October", "2026-11", "11/01/2026", "2026-02-30", "2026-13-01"]) {
+      expect(parse(`from=${bad}`)).toHaveProperty("error");
+      expect(parse(`to=${bad}`)).toHaveProperty("error");
+    }
   });
 
   test("page must be a positive whole number", () => {

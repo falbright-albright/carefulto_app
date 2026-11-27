@@ -274,10 +274,11 @@ export const api = {
   rejectOrder: (id: string) => request<{ order: Order }>("POST", `/orders/${id}/reject`),
   cancelOrder: (id: string, reason?: string) =>
     request<{ order: Order }>("POST", `/orders/${id}/cancel`, { reason }),
-  searchOrders: (params: { q?: string; month?: string; page?: number }) => {
+  searchOrders: (params: { q?: string; from?: string; to?: string; page?: number }) => {
     const qs = new URLSearchParams();
     if (params.q?.trim()) qs.set("q", params.q.trim());
-    if (params.month) qs.set("month", params.month);
+    if (params.from) qs.set("from", params.from);
+    if (params.to) qs.set("to", params.to);
     if (params.page && params.page > 1) qs.set("page", String(params.page));
     const s = qs.toString();
     return request<OrderPage>("GET", `/admin/orders${s ? `?${s}` : ""}`);
