@@ -23,7 +23,7 @@ function Header() {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
       <div className="container flex h-16 items-center justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <Link
             to="/"
             className="text-[1.3rem] font-extrabold tracking-[-0.5px] text-[#0f1f3d]"
@@ -35,18 +35,23 @@ function Header() {
             {user.role}
           </Badge>
         </div>
-        <div className="flex items-center gap-3">
+        {/* On phones Log out is icon-only so the header fits at 375px. */}
+        <div className="flex shrink-0 items-center gap-1 sm:gap-3">
           <span className="hidden text-sm text-muted-foreground sm:inline">{user.name}</span>
           <NotificationsBell />
           <Button
             variant="outline"
             size="sm"
+            aria-label="Log out"
+            title="Log out"
+            className="px-2.5 sm:px-3"
             onClick={async () => {
               await logout();
               navigate("/");
             }}
           >
-            <LogOut className="h-4 w-4" /> Log out
+            <LogOut className="h-4 w-4" />
+            <span className="hidden sm:inline">Log out</span>
           </Button>
         </div>
       </div>
